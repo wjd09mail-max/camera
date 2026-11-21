@@ -1,0 +1,11 @@
+<resources>
+    <style name="Theme.Tabi" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/red</item>
+        <item name="colorPrimaryVariant">@color/red</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">@color/red</item>
+        <item name="android:statusBarColor">@color/ink</item>
+        <item name="android:navigationBarColor">@color/panel</item>
+        <item name="android:windowBackground">@color/ink</item>
+    </style>
+</resources>

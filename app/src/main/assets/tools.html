@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>여행 번역 카메라</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a quiet, confident travel tool — fast with one thumb on a busy street, works without signal.
+   IDEA: a camera viewfinder plus a pocket phrasebook; translations land on the photo like paper tags.
+   PICTURE: the viewfinder itself, dark glass with corner brackets and vermilion labels.
+   COLOUR and TYPE: sumi ink, paper white, torii vermilion; Zen Kaku Gothic for Japanese, Noto Sans KR.
+   LAYOUT: one column, scrolling tab row, big cards to show staff full screen. */
+:root{color-scheme:light dark;
+--bg:light-dark(#f6f4f0,#111214);--ink:light-dark(#16171a,#f1efea);--sub:light-dark(#5d5f66,#a3a4aa);
+--card:light-dark(#ffffff,#1b1c20);--line:light-dark(#e3dfd8,#2c2d33);--red:#e0402a;--redsoft:light-dark(#fde9e5,#3a1d18);--vf:#0d0e10}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Noto Sans KR",system-ui,sans-serif;overflow-x:clip}
+.ja{font-family:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",sans-serif}
+.app{max-width:560px;margin:0 auto;padding:12px 14px 40px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 2px 10px}
+h1{font-size:20px;line-height:1.1;margin:0;font-weight:700;display:flex;gap:8px;align-items:center}
+h1 .seal{width:28px;height:28px;border-radius:7px;background:var(--red);color:#fff;display:grid;place-items:center;font-size:15px}
+.net{font-size:12px;border-radius:999px;padding:3px 10px;background:var(--card);border:1px solid var(--line);color:var(--sub);white-space:nowrap}
+.net.off{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 -14px 14px;padding:0 14px;position:sticky;top:0;z-index:5;background:var(--bg);padding-block:6px}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--sub);font:inherit;font-size:14px;padding:7px 14px;border-radius:999px;min-height:40px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500}
+.view[hidden]{display:none}
+.vf{position:relative;background:var(--vf);border-radius:20px;overflow:hidden;aspect-ratio:3/4;max-height:62vh;width:100%;display:grid;place-items:center}
+.vf.has{aspect-ratio:auto;max-height:none;display:block}
+.br{position:absolute;width:34px;height:34px;border:3px solid #fff;opacity:.85}
+.br.a{top:16px;left:16px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}.br.b{top:16px;right:16px;border-left:0;border-bottom:0;border-radius:0 10px 0 0}
+.br.c{bottom:16px;left:16px;border-right:0;border-top:0;border-radius:0 0 0 10px}.br.d{bottom:16px;right:16px;border-left:0;border-top:0;border-radius:0 0 10px 0}
+.vf.has .br{display:none}
+.empty{color:#e9e7e2;text-align:center;padding:24px;max-width:300px}
+.empty .big{font-size:38px;line-height:1.1}.empty p{margin:10px 0 0;font-size:15px;color:#bdbbb6}
+.stage{position:relative;line-height:0}.stage img{width:100%;display:block}
+.tag{position:absolute;line-height:1.2;font-size:12px;font-weight:500;background:rgba(255,255,255,.95);color:#16171a;border:0;border-left:3px solid var(--red);border-radius:4px;padding:3px 6px;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:inherit;text-align:left}
+.tag.on{background:var(--red);color:#fff}
+.hl{position:absolute;border:2px solid var(--red);border-radius:4px;background:rgba(224,64,42,.12);pointer-events:none}
+.stage.notags .tag,.stage.notags .hl{display:none}
+.scan{position:absolute;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 18px var(--red);top:0;animation:scan 1.6s ease-in-out infinite alternate}
+@keyframes scan{to{top:calc(100% - 3px)}}
+@media (prefers-reduced-motion:reduce){.scan{animation:none;top:50%}}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 4px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;border-radius:999px;padding:7px 13px;min-height:38px;cursor:pointer}
+.chip[aria-pressed=true]{border-color:var(--red);background:var(--redsoft);color:var(--red);font-weight:500}
+.shutterrow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin:14px 0 6px}
+.shutter{width:78px;height:78px;border-radius:50%;border:5px solid var(--ink);background:var(--red);cursor:pointer;box-shadow:inset 0 0 0 4px var(--bg)}
+.shutter:active{transform:scale(.95)}
+.side{justify-self:center;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;border-radius:14px;padding:10px 14px;min-height:44px;cursor:pointer}
+.side[disabled]{opacity:.4}
+button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.status{font-size:14px;color:var(--sub);text-align:center;min-height:22px;margin:4px 0}
+.status.err{color:var(--red)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:10px 0}
+.card b.k{display:block;font-size:13px;color:var(--red);margin-bottom:2px;font-weight:500}
+.list{display:grid;gap:8px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 10px;cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.item.on{border-color:var(--red)}
+.item .src{font-size:15px;color:var(--sub)}.item .ko{font-size:17px;font-weight:700;grid-column:1}
+.item .rd{font-size:13px;color:var(--sub);grid-column:1}.item .nt{font-size:14px;grid-column:1/-1;margin-top:4px;opacity:.85}
+.item .jbig2{font-size:19px;font-weight:700;grid-column:1}
+.say{grid-row:1/3;grid-column:2;align-self:center;border:1px solid var(--line);background:none;color:var(--ink);border-radius:10px;min-width:44px;min-height:44px;font-size:17px;cursor:pointer}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:18px 0 8px}
+.bar h2{font-size:17px;margin:0}
+.small{font-size:13px;color:var(--sub)}
+.link{border:0;background:none;color:var(--red);font:inherit;font-size:14px;cursor:pointer;min-height:40px;padding:0 4px}
+textarea,input[type=text],input[type=number],input[type=search],input[type=tel]{width:100%;font:inherit;font-size:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:11px 13px;min-height:46px}
+textarea{min-height:84px;resize:vertical}
+.go{width:100%;margin-top:10px;border:0;background:var(--ink);color:var(--bg);font:inherit;font-weight:700;font-size:16px;border-radius:14px;min-height:50px;cursor:pointer}
+.go.red{background:var(--red);color:#fff}
+.show{display:none;position:fixed;inset:0;background:#fff;color:#111;z-index:20;padding:max(24px,env(safe-area-inset-top)) 22px 24px;flex-direction:column;justify-content:center;gap:16px;text-align:center;overflow:auto}
+.show.open{display:flex}
+.show .jbig{font-size:clamp(28px,8.5vw,50px);line-height:1.35;font-weight:700;overflow-wrap:anywhere;white-space:pre-line}
+.show .rdl{font-size:17px;color:#444}.show .kosm{font-size:16px;color:#777;white-space:pre-line}
+.show .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.show button{border:1px solid #ccc;background:#fff;color:#111;font:inherit;border-radius:12px;min-height:48px;padding:0 18px;cursor:pointer}
+.hist{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.hist button{border:0;padding:0;background:var(--card);border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.hist img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.hist span{display:block;font-size:12px;padding:5px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dict{display:grid;gap:6px}
+.dr{display:grid;grid-template-columns:minmax(0,7.5em) minmax(0,1fr);gap:10px;align-items:baseline;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.dr .w{font-size:20px;font-weight:700;line-height:1.25}.dr .r{font-size:13px;color:var(--sub);display:block}
+.dr .m{font-size:15px}
+.big-n{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.big-n output{font-size:clamp(26px,8vw,40px);font-weight:700;line-height:1.1;white-space:nowrap}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+label{font-size:14px;color:var(--sub);display:block;margin-bottom:4px}
+.sos{display:grid;gap:8px}
+.sos a{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.sos a b{font-size:22px;white-space:nowrap;color:var(--red)}
+.sos a span{font-size:15px}.sos a small{grid-column:1/-1;color:var(--sub);font-size:13px}
+.ck{display:flex;flex-wrap:wrap;gap:6px}
+.ck label{margin:0;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;min-height:40px;font-size:14px;cursor:pointer}
+.ck input{width:18px;height:18px;accent-color:var(--red)}
+.note{font-size:13px;color:var(--sub);margin-top:18px}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1><span class="seal ja">訳</span>여행 번역 카메라</h1>
+    <span class="net" id="net">온라인</span>
+  </header>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" aria-selected="true" data-v="cam">카메라</button>
+    <button role="tab" aria-selected="false" data-v="talk">회화</button>
+    <button role="tab" aria-selected="false" data-v="dict">한자 사전</button>
+    <button role="tab" aria-selected="false" data-v="tool">환율·면세</button>
+    <button role="tab" aria-selected="false" data-v="card">카드</button>
+    <button role="tab" aria-selected="false" data-v="sos">긴급</button>
+    <button role="tab" aria-selected="false" data-v="hist">기록</button>
+  </nav>
+
+  <!-- CAMERA (online) -->
+  <section class="view" id="v-cam">
+    <div class="vf" id="vf">
+      <i class="br a"></i><i class="br b"></i><i class="br c"></i><i class="br d"></i>
+      <div class="empty" id="empty"><div class="big ja">メニュー · 出口 · 改札</div><p>빨간 셔터를 누르면 카메라가 열려요. 사진 위에 한국어가 바로 붙어요.</p></div>
+    </div>
+    <div class="chips" id="modes">
+      <button class="chip" aria-pressed="true" data-m="auto">자동</button>
+      <button class="chip" aria-pressed="false" data-m="menu">메뉴판</button>
+      <button class="chip" aria-pressed="false" data-m="sign">표지판·역</button>
+      <button class="chip" aria-pressed="false" data-m="product">상품·약</button>
+    </div>
+    <div class="shutterrow">
+      <button class="side" id="gal">앨범</button>
+      <button class="shutter" id="shoot" aria-label="사진 찍어 번역"></button>
+      <button class="side" id="tg" disabled>라벨 숨기기</button>
+    </div>
+    <div class="status" id="st" aria-live="polite"></div>
+    <div id="res"></div>
+    <input type="file" id="fCam" accept="image/*" capture="environment">
+    <input type="file" id="fGal" accept="image/*">
+  </section>
+
+  <!-- PHRASES (offline) -->
+  <section class="view" id="v-talk" hidden>
+    <div class="chips" id="pcat"></div>
+    <div class="list" id="plist"></div>
+    <div class="bar"><h2>직접 입력</h2><span class="small">인터넷 필요</span></div>
+    <textarea id="kin" placeholder="하고 싶은 말을 한국어로 적어요. 예) 고수 빼주세요"></textarea>
+    <button class="go" id="kgo">일본어로 바꾸기</button>
+    <div class="status" id="kst" aria-live="polite"></div>
+  </section>
+
+  <!-- DICTIONARY (offline) -->
+  <section class="view" id="v-dict" hidden>
+    <input type="search" id="dq" placeholder="한자·히라가나·한국어로 찾기 (예: 豚, 출구)">
+    <div class="chips" id="dcat"></div>
+    <p class="small" id="dcount"></p>
+    <div class="dict" id="dlist"></div>
+  </section>
+
+  <!-- TOOLS (offline) -->
+  <section class="view" id="v-tool" hidden>
+    <div class="card">
+      <b class="k">환율 계산</b>
+      <div class="two">
+        <div><label for="yen">엔 (¥)</label><input type="number" id="yen" inputmode="decimal" value="1000"></div>
+        <div><label for="won">원 (₩)</label><input type="number" id="won" inputmode="decimal"></div>
+      </div>
+      <div class="chips" id="yq"></div>
+      <label for="rate" style="margin-top:8px">100엔 = 몇 원? (오늘 환율로 바꿔 두세요)</label>
+      <input type="number" id="rate" inputmode="decimal" value="850">
+      <p class="small">기본값은 2026년 10월 중순 매매기준율(약 843~847원) 근처예요. 카드·환전 수수료는 빠져 있어요.</p>
+    </div>
+    <div class="card">
+      <b class="k">면세 계산</b>
+      <label for="tx">한 가게에서 오늘 산 금액 합계 (세금 포함, ¥)</label>
+      <input type="number" id="tx" inputmode="numeric" value="6000">
+      <div class="chips" id="trate">
+        <button class="chip" aria-pressed="true" data-r="10">일반 10%</button>
+        <button class="chip" aria-pressed="false" data-r="8">식품 8%</button>
+      </div>
+      <div class="big-n"><output id="tout"></output><span class="small" id="twon"></span></div>
+      <p id="tmsg" style="margin:6px 0 0"></p>
+      <p class="small">2026년 11월 1일 구매분부터는 매장에서 세금 포함 가격으로 내고, 출국할 때 공항 세관에서 반출 확인을 받은 뒤 환급받아요. 세관 확인이 없으면 환급이 안 돼요. 기준은 같은 가게·같은 날 세전 ¥5,000 이상이에요. 가게에 따라 환급 수수료가 있을 수 있어요.</p>
+    </div>
+    <div class="card">
+      <b class="k">신발·옷 사이즈</b>
+      <p style="margin:0">일본 신발은 cm 표기: 한국 260mm = 일본 26.0cm. 옷은 S·M·L이 한국보다 한 치수 작게 나오는 편이라 입어 보는 게 좋아요.</p>
+    </div>
+  </section>
+
+  <!-- CARDS (offline) -->
+  <section class="view" id="v-card" hidden>
+    <div class="card">
+      <b class="k">알레르기·식이 카드</b>
+      <div class="ck" id="alg"></div>
+      <div class="ck" style="margin-top:8px"><label><input type="checkbox" id="severe">조금만 먹어도 위험해요</label></div>
+      <button class="go red" id="algo">식당에 보여주기</button>
+    </div>
+    <div class="card">
+      <b class="k">택시·숙소 주소 카드</b>
+      <label for="hn">숙소 이름</label><input type="text" id="hn" placeholder="예: ホテル〇〇 難波">
+      <label for="ha" style="margin-top:8px">일본어 주소 (예약 확인 메일에서 복사)</label><textarea id="ha" placeholder="大阪府大阪市中央区…"></textarea>
+      <label for="hp" style="margin-top:8px">숙소 전화번호</label><input type="tel" id="hp" placeholder="06-…">
+      <button class="go" id="hgo">택시 기사님께 보여주기</button>
+      <p class="small">이 기기에만 저장돼요.</p>
+    </div>
+  </section>
+
+  <!-- SOS (offline) -->
+  <section class="view" id="v-sos" hidden>
+    <div class="sos">
+      <a href="tel:110"><span>경찰 (사고·도난·범죄)</span><b>110</b><small>무료, 24시간</small></a>
+      <a href="tel:119"><span>구급차·화재</span><b>119</b><small>무료, 24시간. 외국어는 통역 연결</small></a>
+      <a href="tel:05038162787"><span>Japan Visitor Hotline (한국어 가능)</span><b>050-3816-2787</b><small>일본정부관광국, 24시간. 아플 때·재해·여행 문의</small></a>
+      <a href="tel:+82232100404"><span>외교부 영사콜센터</span><b>+82-2-3210-0404</b><small>사건사고, 24시간 (유료)</small></a>
+      <a href="tel:+819030500746"><span>주오사카 총영사관 (근무시간 외 긴급)</span><b>+81-90-3050-0746</b><small>근무시간 대표 +81-6-4256-2345</small></a>
+      <a href="tel:+818085882806"><span>주후쿠오카 총영사관 (근무시간 외 사건사고)</span><b>+81-80-8588-2806</b><small>여권 분실 +81-80-2956-6736</small></a>
+    </div>
+    <p class="small">전화가 안 걸리면 번호를 직접 눌러 주세요. 도쿄 등 다른 지역 공관 번호는 아래 메모에 적어 두세요.</p>
+    <div class="card">
+      <b class="k">내 비상 메모</b>
+      <textarea id="memo" placeholder="여행자보험 긴급번호, 대사관, 일행 연락처, 여권번호 뒷자리 등"></textarea>
+      <p class="small">이 기기에만 자동 저장돼요.</p>
+    </div>
+    <div class="bar"><h2>바로 보여주기</h2></div>
+    <div class="list" id="soslist"></div>
+    <div class="card"><b class="k">지진이 나면</b>탁자 아래로 몸을 숨기고 머리를 보호하세요. 흔들림이 멈추면 출구를 확보하고, 바닷가라면 津波(쓰나미) 안내에 따라 높은 곳으로. 대피소 표지는 避難所예요.</div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="view" id="v-hist" hidden>
+    <div class="bar" style="margin-top:0"><h2>번역한 사진</h2><button class="link" id="clr">모두 지우기</button></div>
+    <div class="hist" id="hl"></div>
+    <p class="small" id="hempty">아직 기록이 없어요. 이 기기에 최근 12장이 저장되고, 오프라인에서도 다시 볼 수 있어요.</p>
+  </section>
+
+  <p class="note">사진 번역과 직접 입력은 인터넷이 필요해요. 회화·한자 사전·환율·카드·긴급 탭은 페이지가 열려 있으면 인터넷 없이 써요. 알레르기·약 정보는 직원이나 약사에게 꼭 다시 확인하세요.</p>
+</div>
+
+<div class="show" id="show" role="dialog" aria-modal="true">
+  <div class="jbig ja" id="sj"></div>
+  <div class="rdl" id="sr"></div>
+  <div class="kosm" id="sk"></div>
+  <div class="row"><button id="ssay">🔊 듣기</button><button id="sclose">닫기</button></div>
+</div>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
+const rows=t=>t.trim().split('\n').map(l=>l.split('|').map(s=>s.trim()));
+
+/* ---------- data ---------- */
+const PH={
+'기본':rows(`すみません。|스미마셍|저기요 / 실례합니다
+ありがとうございます。|아리가토- 고자이마스|감사합니다
+日本語が話せません。|니혼고가 하나세마셍|일본어를 못해요
+もう一度お願いします。|모- 이치도 오네가이시마스|한 번 더 말해 주세요
+ゆっくり話してください。|윳쿠리 하나시테 쿠다사이|천천히 말해 주세요
+トイレはどこですか？|토이레와 도코데스카|화장실이 어디예요?
+写真を撮ってもいいですか？|샤신오 톳테모 이이데스카|사진 찍어도 돼요?
+大丈夫です。|다이죠-부데스|괜찮아요
+韓国語が話せる人はいますか？|칸코쿠고가 하나세루 히토와 이마스카|한국어 하는 분 있어요?`),
+'식당':rows(`2人です。|후타리데스|2명이에요
+予約していません。|요야쿠 시테 이마셍|예약 안 했어요
+メニューをください。|메뉴-오 쿠다사이|메뉴 주세요
+これをください。|코레오 쿠다사이|이거 주세요
+おすすめは何ですか？|오스스메와 난데스카|추천 메뉴가 뭐예요?
+辛くしないでください。|카라쿠 시나이데 쿠다사이|안 맵게 해 주세요
+パクチー抜きでお願いします。|파쿠치- 누키데 오네가이시마스|고수 빼 주세요
+お水をください。|오미즈오 쿠다사이|물 주세요
+お会計をお願いします。|오카이케-오 오네가이시마스|계산해 주세요
+別々に払えますか？|베츠베츠니 하라에마스카|따로 계산돼요?
+持ち帰りできますか？|모치카에리 데키마스카|포장 돼요?`),
+'교통':rows(`この駅にはどうやって行けばいいですか？|코노 에키니와 도-얏테 이케바 이이데스카|(지도 보여주며) 이 역에 어떻게 가요?
+この電車はこの駅に止まりますか？|코노 덴샤와 코노 에키니 토마리마스카|이 전철 이 역에 서요?
+何番線ですか？|난반센데스카|몇 번 승강장이에요?
+精算機はどこですか？|세-산키와 도코데스카|정산기 어디예요?
+切符を間違えて買いました。|킷푸오 마치가에테 카이마시타|표를 잘못 샀어요
+この住所までお願いします。|코노 쥬-쇼마데 오네가이시마스|이 주소로 가 주세요
+ここで止めてください。|코코데 토메테 쿠다사이|여기서 세워 주세요
+空港までいくらですか？|쿠-코-마데 이쿠라데스카|공항까지 얼마예요?`),
+'쇼핑':rows(`これはいくらですか？|코레와 이쿠라데스카|이거 얼마예요?
+カードは使えますか？|카-도와 츠카에마스카|카드 돼요?
+免税手続きはできますか？|멘제- 테츠즈키와 데키마스카|면세 수속 돼요?
+試着してもいいですか？|시챠쿠 시테모 이이데스카|입어 봐도 돼요?
+他のサイズはありますか？|호카노 사이즈와 아리마스카|다른 사이즈 있어요?
+これはありますか？|코레와 아리마스카|(사진 보여주며) 이거 있어요?
+袋はいりません。|후쿠로와 이리마셍|봉투 필요 없어요
+温めてください。|아타타메테 쿠다사이|데워 주세요 (편의점)`),
+'숙소':rows(`チェックインをお願いします。|첵쿠인오 오네가이시마스|체크인 할게요
+荷物を預かってもらえますか？|니모츠오 아즈캇테 모라에마스카|짐 맡길 수 있어요?
+Wi-Fiのパスワードは何ですか？|와이파이노 파스와-도와 난데스카|와이파이 비밀번호가 뭐예요?
+チェックアウトは何時ですか？|첵쿠아우토와 난지데스카|체크아웃 몇 시예요?
+部屋の鍵をなくしました。|헤야노 카기오 나쿠시마시타|방 열쇠를 잃어버렸어요
+タオルをもう一枚ください。|타오루오 모- 이치마이 쿠다사이|수건 한 장 더 주세요`),
+'긴급':rows(`助けてください！|타스케테 쿠다사이|도와주세요!
+救急車を呼んでください。|큐-큐-샤오 욘데 쿠다사이|구급차 불러 주세요
+警察を呼んでください。|케-사츠오 욘데 쿠다사이|경찰 불러 주세요
+気分が悪いです。|키분가 와루이데스|몸이 안 좋아요
+病院に連れて行ってください。|뵤-인니 츠레테 잇테 쿠다사이|병원에 데려가 주세요
+財布をなくしました。|사이후오 나쿠시마시타|지갑을 잃어버렸어요
+パスポートをなくしました。|파스포-토오 나쿠시마시타|여권을 잃어버렸어요
+道に迷いました。|미치니 마요이마시타|길을 잃었어요`)};
+
+const DICT={
+'음식':rows(`牛|ぎゅう|소고기
+豚|ぶた・とん|돼지고기
+鶏|とり|닭고기
+鴨|かも|오리
+馬刺し|ばさし|말고기 회
+魚|さかな|생선
+海老・えび|えび|새우
+蟹・かに|かに|게
+烏賊・いか|いか|오징어
+蛸・たこ|たこ|문어
+貝|かい|조개
+牡蠣|かき|굴
+鮭|さけ|연어
+鮪|まぐろ|참치
+鰻|うなぎ|장어
+穴子|あなご|붕장어
+雲丹・うに|うに|성게
+いくら|いくら|연어알
+明太子|めんたいこ|명란
+玉子・卵|たまご|달걀
+豆腐|とうふ|두부
+納豆|なっとう|낫토 (발효 콩)
+蕎麦|そば|메밀국수
+麺|めん|면
+ご飯|ごはん|밥
+丼|どん|덮밥
+定食|ていしょく|정식 (밥·국·반찬 세트)
+刺身|さしみ|회
+寿司|すし|초밥
+天ぷら|てんぷら|튀김
+唐揚げ|からあげ|닭튀김
+焼き|やき|구이
+揚げ|あげ|튀김
+煮|に|조림
+蒸し|むし|찜
+生|なま|날것 / 생(맥주)
+豚骨|とんこつ|돼지뼈 육수
+醤油|しょうゆ|간장
+味噌|みそ|된장
+塩|しお|소금
+葱|ねぎ|파
+生姜|しょうが|생강
+辛い|からい|매운
+甘い|あまい|단
+大盛り|おおもり|곱빼기
+並|なみ|보통
+替え玉|かえだま|라멘 면 추가
+食べ放題|たべほうだい|음식 무제한
+飲み放題|のみほうだい|음료 무제한
+お通し|おとおし|자릿세 겸 기본 안주
+日替わり|ひがわり|오늘의 메뉴
+単品|たんぴん|단품
+時価|じか|시가
+税込|ぜいこみ|세금 포함
+税抜|ぜいぬき|세금 별도
+持ち帰り|もちかえり|포장
+店内|てんない|매장 식사
+小麦|こむぎ|밀 (알레르기 표시)
+乳|にゅう|우유·유제품 (알레르기 표시)
+落花生|らっかせい|땅콩 (알레르기 표시)
+抹茶|まっちゃ|말차`),
+'표지판·교통':rows(`出口|でぐち|출구
+入口|いりぐち|입구
+改札|かいさつ|개찰구
+乗り場|のりば|타는 곳
+乗換|のりかえ|갈아타기
+番線|ばんせん|~번 승강장
+方面|ほうめん|~방면
+各駅停車・普通|かくえきていしゃ・ふつう|모든 역 정차
+快速|かいそく|쾌속 (일부 역 통과)
+急行|きゅうこう|급행
+特急|とっきゅう|특급 (별도 요금인 경우 많음)
+指定席|していせき|지정석
+自由席|じゆうせき|자유석
+女性専用車|じょせいせんようしゃ|여성 전용칸
+精算|せいさん|요금 정산 (부족분)
+切符|きっぷ|표
+始発|しはつ|첫차
+終電|しゅうでん|막차
+運休|うんきゅう|운행 중지
+遅延|ちえん|지연
+東口・西口|ひがしぐち・にしぐち|동쪽·서쪽 출구
+南口・北口|みなみぐち・きたぐち|남쪽·북쪽 출구
+押|おす|미세요
+引|ひく|당기세요
+禁止|きんし|금지
+立入禁止|たちいりきんし|출입 금지
+撮影禁止|さつえいきんし|촬영 금지
+禁煙|きんえん|금연
+喫煙所|きつえんじょ|흡연 구역
+危険|きけん|위험
+注意|ちゅうい|주의
+非常口|ひじょうぐち|비상구
+お手洗い・化粧室|おてあらい・けしょうしつ|화장실
+男|おとこ|남자
+女|おんな|여자
+駐車場|ちゅうしゃじょう|주차장
+交番|こうばん|파출소
+避難所|ひなんじょ|대피소
+地震|じしん|지진
+津波|つなみ|쓰나미
+温泉|おんせん|온천
+湯|ゆ|탕 (온천)`),
+'가게·약':rows(`営業中|えいぎょうちゅう|영업 중
+準備中|じゅんびちゅう|준비 중 (아직 안 엶)
+定休日|ていきゅうび|정기 휴일
+本日休業|ほんじつきゅうぎょう|오늘 휴무
+満席|まんせき|만석
+受付|うけつけ|접수
+会計|かいけい|계산
+現金のみ|げんきんのみ|현금만
+割引|わりびき|할인
+半額|はんがく|반값
+売切れ|うりきれ|품절
+免税|めんぜい|면세
+袋|ふくろ|봉투
+箸|はし|젓가락
+温め|あたため|데우기
+要冷蔵|ようれいぞう|냉장 보관
+賞味期限|しょうみきげん|맛 보장 기한
+消費期限|しょうひきげん|소비 기한 (지나면 먹지 말 것)
+薬局|やっきょく|약국
+病院|びょういん|병원
+風邪薬|かぜぐすり|감기약
+頭痛|ずつう|두통
+解熱|げねつ|해열
+鎮痛|ちんつう|진통
+胃腸薬|いちょうやく|위장약
+酔い止め|よいどめ|멀미약
+食後|しょくご|식후
+食前|しょくぜん|식전
+用法・用量|ようほう・ようりょう|복용법·복용량
+1日3回|いちにちさんかい|하루 3번
+成人|せいじん|성인 (15세 이상인 경우 많음)`)};
+
+const ALG=rows(`卵|달걀
+乳製品|우유·유제품
+小麦|밀
+そば|메밀
+落花生|땅콩
+えび|새우
+かに|게
+くるみ|호두
+魚|생선
+貝類|조개류
+大豆|대두
+ごま|참깨
+豚肉|돼지고기
+牛肉|소고기
+アルコール|알코올`);
+
+/* ---------- common ---------- */
+const APP=window.AndroidApp||null;
+function canSpeak(){if(APP)return true;try{return 'speechSynthesis' in window}catch(e){return false}}
+function speak(t){if(APP){try{APP.speak(t)}catch(e){}return}try{const u=new SpeechSynthesisUtterance(t);u.lang='ja-JP';u.rate=.85;speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+function openShow(j,k,r){$('#sj').textContent=j;$('#sk').textContent=k||'';$('#sr').textContent=r||'';$('#ssay').hidden=!canSpeak();$('#show').classList.add('open')}
+$('#sclose').addEventListener('click',()=>$('#show').classList.remove('open'));
+$('#ssay').addEventListener('click',()=>speak($('#sj').textContent));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#show').classList.remove('open')});
+
+function netUI(){const on=navigator.onLine!==false;const n=$('#net');n.textContent=on?'온라인':'오프라인';n.classList.toggle('off',!on)}
+addEventListener('online',netUI);addEventListener('offline',netUI);netUI();
+
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!=='v-'+b.dataset.v);
+  if(b.dataset.v==='hist')drawHist();
+  LS.set('tc-tab',b.dataset.v);
+}));
+if(APP){['cam','hist'].forEach(v=>{document.querySelector('#tabs button[data-v="'+v+'"]').style.display='none'});const nt=document.querySelector('.note');if(nt)nt.textContent='이 화면은 인터넷 없이 동작해요. 직접 입력 번역은 기기 안 번역 모델을 써요. 알레르기·약 정보는 직원이나 약사에게 꼭 다시 확인하세요.';document.querySelectorAll('#v-talk .bar .small').forEach(e=>e.textContent='오프라인 번역')}
+let lastTab=LS.get('tc-tab',APP?'talk':'cam');if(APP&&(lastTab==='cam'||lastTab==='hist'))lastTab='talk';document.querySelector(`#tabs button[data-v="${lastTab}"]`)?.click();
+
+function chipGroup(el,keys,cur,on){
+  el.innerHTML=keys.map(k=>`<button class="chip" aria-pressed="${k===cur}" data-k="${esc(k)}">${esc(k)}</button>`).join('');
+  el.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{el.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));on(c.dataset.k)}));
+}
+
+/* ---------- phrases ---------- */
+function phraseRows(list){return list.map((p,i)=>`<div class="item" data-i="${i}" role="button" tabindex="0"><span class="jbig2 ja">${esc(p[0])}</span><span class="ko">${esc(p[2])}</span><span class="rd">${esc(p[1])}</span>${canSpeak()?`<button class="say" data-s="${i}" aria-label="발음 듣기">🔊</button>`:''}</div>`).join('')}
+function bindPhrases(el,list){
+  el.querySelectorAll('.item').forEach(it=>{const p=list[+it.dataset.i];const go=()=>openShow(p[0],p[2],p[1]);
+    it.addEventListener('click',e=>{if(!e.target.closest('.say'))go()});it.addEventListener('keydown',e=>{if(e.key==='Enter')go()})});
+  el.querySelectorAll('.say').forEach(b=>b.addEventListener('click',()=>speak(list[+b.dataset.s][0])));
+}
+function drawPh(cat){const l=PH[cat];$('#plist').innerHTML=phraseRows(l);bindPhrases($('#plist'),l);LS.set('tc-pcat',cat)}
+const pc=LS.get('tc-pcat','기본');chipGroup($('#pcat'),Object.keys(PH),PH[pc]?pc:'기본',drawPh);drawPh(PH[pc]?pc:'기본');
+$('#soslist').innerHTML=phraseRows(PH['긴급']);bindPhrases($('#soslist'),PH['긴급']);
+
+/* ---------- dictionary ---------- */
+let dcat='전체';
+function drawDict(){
+  const q=$('#dq').value.trim().toLowerCase();
+  const all=Object.entries(DICT).flatMap(([c,l])=>l.map(r=>[...r,c]));
+  const hit=all.filter(r=>(dcat==='전체'||r[3]===dcat)&&(!q||r.slice(0,3).some(s=>s.toLowerCase().includes(q))));
+  $('#dcount').textContent=`${hit.length}개 단어`;
+  $('#dlist').innerHTML=hit.map(r=>`<div class="dr"><div><span class="w ja">${esc(r[0])}</span><span class="r ja">${esc(r[1])}</span></div><div class="m">${esc(r[2])}</div></div>`).join('')||'<p class="small">없어요. 사진을 찍어 번역해 보세요 (인터넷 필요).</p>';
+}
+chipGroup($('#dcat'),['전체',...Object.keys(DICT)],'전체',k=>{dcat=k;drawDict()});
+$('#dq').addEventListener('input',drawDict);drawDict();
+
+/* ---------- currency & tax ---------- */
+const fmt=n=>isFinite(n)?Math.round(n).toLocaleString('ko-KR'):'';
+$('#rate').value=LS.get('tc-rate',850);
+function rate(){return Math.max(0,+$('#rate').value||0)/100}
+function fromYen(){$('#won').value=Math.round((+$('#yen').value||0)*rate())}
+function fromWon(){const r=rate();$('#yen').value=r?Math.round((+$('#won').value||0)/r):''}
+$('#yen').addEventListener('input',fromYen);$('#won').addEventListener('input',fromWon);
+$('#rate').addEventListener('input',()=>{LS.set('tc-rate',+$('#rate').value||850);fromYen();drawTax()});
+$('#yq').innerHTML=[500,1000,3000,5000,10000].map(v=>`<button class="chip" data-y="${v}">¥${v.toLocaleString()}</button>`).join('');
+$('#yq').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{$('#yen').value=c.dataset.y;fromYen()}));
+fromYen();
+let trate=10;
+function drawTax(){
+  const paid=+$('#tx').value||0,pre=Math.floor(paid/(1+trate/100)),tax=paid-pre;
+  $('#tout').textContent=`환급 약 ¥${tax.toLocaleString()}`;$('#twon').textContent=`≈ ₩${fmt(tax*rate())}`;
+  const ok=pre>=5000;
+  $('#tmsg').innerHTML=`세전 ¥${pre.toLocaleString()} → ${ok?'<b style="color:var(--red)">면세 대상이에요.</b> 계산할 때 여권을 보여주세요.':`면세 기준까지 세전 ¥${(5000-pre).toLocaleString()} 더 필요해요.`}`;
+}
+document.querySelectorAll('#trate .chip').forEach(c=>c.addEventListener('click',()=>{trate=+c.dataset.r;document.querySelectorAll('#trate .chip').forEach(x=>x.setAttribute('aria-pressed',x===c));drawTax()}));
+$('#tx').addEventListener('input',drawTax);drawTax();
+
+/* ---------- cards ---------- */
+const algSel=new Set(LS.get('tc-alg',[]));
+$('#alg').innerHTML=ALG.map((a,i)=>`<label><input type="checkbox" data-i="${i}"${algSel.has(a[0])?' checked':''}>${esc(a[1])}</label>`).join('');
+$('#severe').checked=LS.get('tc-sev',false);
+$('#alg').addEventListener('change',e=>{const a=ALG[+e.target.dataset.i][0];e.target.checked?algSel.add(a):algSel.delete(a);LS.set('tc-alg',[...algSel])});
+$('#severe').addEventListener('change',()=>LS.set('tc-sev',$('#severe').checked));
+$('#algo').addEventListener('click',()=>{
+  const sel=ALG.filter(a=>algSel.has(a[0]));
+  if(!sel.length)return openShow('アレルギーはありません。','알레르기 없어요 (항목을 먼저 골라 주세요)');
+  const ja=`私は\n${sel.map(a=>a[0]).join('・')}\nのアレルギーがあります。`+($('#severe').checked?'\n少量でも危険です。':'')+'\nこれらが入っていない料理を教えてください。';
+  const ko=`저는 ${sel.map(a=>a[1]).join(', ')} 알레르기가 있어요.`+($('#severe').checked?' 조금만 먹어도 위험해요.':'')+' 들어가지 않은 요리를 알려 주세요.';
+  openShow(ja,ko);
+});
+['hn','ha','hp'].forEach(id=>{const el=$('#'+id);el.value=LS.get('tc-'+id,'');el.addEventListener('input',()=>LS.set('tc-'+id,el.value))});
+$('#hgo').addEventListener('click',()=>{
+  const n=$('#hn').value.trim(),a=$('#ha').value.trim(),p=$('#hp').value.trim();
+  if(!n&&!a)return openShow('この住所までお願いします。','숙소 이름이나 주소를 먼저 적어 주세요');
+  openShow(`この住所までお願いします。\n\n${n}\n${a}${p?'\nTEL '+p:''}`,'이 주소로 가 주세요','코노 쥬-쇼마데 오네가이시마스');
+});
+$('#memo').value=LS.get('tc-memo','');$('#memo').addEventListener('input',()=>LS.set('tc-memo',$('#memo').value));
+
+/* ---------- camera (online) ---------- */
+let sample=null,mode=LS.get('tc-mode','auto'),cur=null,busy=false,sel=-1;
+const HINT={auto:'사진 종류를 스스로 판단해.',
+ menu:'메뉴판이다. 각 요리마다 ko에 요리 이름 번역, note에 어떤 음식인지·주재료·맛을 한 줄로, 가격이 보이면 note 앞에 "¥가격"을 붙여라.',
+ sign:'표지판·역 안내·지도다. 출구 번호, 노선명, 방향, 경고 문구를 빠짐없이. note에 여행자가 해야 할 행동을 짧게.',
+ product:'상품 포장·약·화장품이다. note에 용도, 복용/사용법, 주의사항을 짧게. 약이면 성분명도.'};
+document.querySelectorAll('#modes .chip').forEach(c=>{c.setAttribute('aria-pressed',c.dataset.m===mode);c.addEventListener('click',()=>{
+  mode=c.dataset.m;document.querySelectorAll('#modes .chip').forEach(x=>x.setAttribute('aria-pressed',x===c));LS.set('tc-mode',mode)})});
+function setStatus(t,err){const s=$('#st');s.textContent=t||'';s.classList.toggle('err',!!err)}
+async function getSample(){if(sample)return sample;if(typeof claude==='undefined'||!claude.use)return null;sample=await claude.use('sample');return sample}
+
+$('#shoot').addEventListener('click',()=>{if(!busy)$('#fCam').click()});
+$('#gal').addEventListener('click',()=>{if(!busy)$('#fGal').click()});
+['#fCam','#fGal'].forEach(id=>$(id).addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)run(f)}));
+$('#tg').addEventListener('click',()=>{const s=$('.stage');if(!s)return;s.classList.toggle('notags');$('#tg').textContent=s.classList.contains('notags')?'라벨 보기':'라벨 숨기기'});
+
+function loadImg(src){return new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=src})}
+async function shrink(file,max,q){
+  const url=URL.createObjectURL(file);
+  try{const img=await loadImg(url);const k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+    const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',q));
+    return {blob,data:c.toDataURL('image/jpeg',q)};
+  }finally{URL.revokeObjectURL(url)}
+}
+function parseJSON(t){const a=t.indexOf('{'),b=t.lastIndexOf('}');if(a<0||b<a)throw new Error('bad');return JSON.parse(t.slice(a,b+1))}
+
+async function run(file){
+  busy=true;$('#shoot').disabled=true;
+  let big,thumb;
+  try{big=await shrink(file,1600,.85);thumb=await shrink(file,360,.7)}catch(e){busy=false;$('#shoot').disabled=false;return setStatus('사진을 열 수 없어요. 다른 사진으로 해 볼까요?',true)}
+  cur={img:big.data,thumb:thumb.data,res:null,t:Date.now()};sel=-1;
+  drawStage(navigator.onLine!==false);$('#res').innerHTML='';
+  if(navigator.onLine===false){busy=false;$('#shoot').disabled=false;return setStatus('지금은 오프라인이라 사진 번역이 안 돼요. 한자 사전 탭에서 글자를 찾아보세요.',true)}
+  setStatus('글자를 읽고 번역하는 중…');
+  try{
+    const s=await getSample();if(!s)throw {code:'none'};
+    const lim=await s.limits();if(!lim||!lim.images)throw {code:'none'};
+    const prompt=`너는 일본 여행 중인 한국인을 위한 카메라 번역기다. 첨부 사진 속 일본어(영어·중국어 포함 외국어) 글자를 모두 찾아 자연스러운 한국어로 번역하라.
+${HINT[mode]}
+JSON만 출력하라, 다른 말 없이:
+{"scene":"menu|sign|product|ticket|other","summary":"이 사진이 무엇이고 여행자가 꼭 알아야 할 것, 한국어 1~2문장","items":[{"src":"원문 그대로","read":"원문을 일본어로 소리 내 읽은 발음을 한글로 (예: 라멘). 한글이면 빈 문자열","ko":"한국어 번역","note":"짧은 설명 또는 빈 문자열","box":[x0,y0,x1,y1]}]}
+box는 사진 왼쪽 위가 (0,0), 오른쪽 아래가 (1000,1000)인 정규화 좌표로 그 글자 덩어리를 감싸는 사각형. 의미 단위(메뉴 한 줄, 문구 하나)로 묶고 위에서 아래 순서로 최대 30개. 글자가 없으면 items는 []이고 summary에 그렇다고 써라.`;
+    const r=await s(prompt,{images:[big.blob],modelTier:'default'});
+    const res=parseJSON(r.text);res.items=(res.items||[]).filter(x=>x&&x.ko);
+    cur.res=res;saveHist(cur);drawStage(false);drawRes();
+    setStatus(res.items.length?`${res.items.length}개 문구를 번역했어요. 목록을 누르면 크게 보여요.`:'');
+  }catch(e){
+    drawStage(false);const c=e&&e.code;
+    setStatus(c==='not_granted'?'번역 사용이 허락되지 않았어요. 다시 누르면 허락 창이 나와요.':c==='rate_limited'?'잠깐 너무 많이 썼어요. 조금 뒤에 다시 찍어 주세요.':c==='none'?'사진 번역은 Claude 앱이나 claude.ai에서 연 페이지에서만 돼요. 다른 탭은 그대로 쓸 수 있어요.':'번역에 실패했어요. 글자가 크게 나오게 다시 찍어 볼까요?',true);
+  }finally{busy=false;$('#shoot').disabled=false}
+}
+function drawStage(scanning){
+  const vf=$('#vf');if(!cur){vf.classList.remove('has');return}
+  vf.classList.add('has');$('#empty')?.remove();vf.querySelector('.stage')?.remove();
+  const items=cur.res?.items||[];
+  const st=document.createElement('div');st.className='stage';
+  st.innerHTML=`<img src="${cur.img}" alt="찍은 사진">`+items.map((it,i)=>{
+    const b=Array.isArray(it.box)&&it.box.length===4?it.box.map(n=>Math.max(0,Math.min(1000,+n||0))/10):null;if(!b)return'';
+    return `<div class="hl" style="left:${b[0]}%;top:${b[1]}%;width:${Math.max(1,b[2]-b[0])}%;height:${Math.max(1,b[3]-b[1])}%"></div><button class="tag${i===sel?' on':''}" data-i="${i}" style="left:${Math.min(b[0],80)}%;top:${b[1]}%">${esc(it.ko)}</button>`}).join('')+(scanning?'<div class="scan"></div>':'');
+  vf.appendChild(st);
+  st.querySelectorAll('.tag').forEach(t=>t.addEventListener('click',()=>pick(+t.dataset.i,true)));
+  $('#tg').disabled=!items.length;$('#tg').textContent='라벨 숨기기';
+}
+function drawRes(){
+  const r=cur?.res;if(!r){$('#res').innerHTML='';return}
+  $('#res').innerHTML=`<div class="card"><b class="k">한눈에</b>${esc(r.summary)}</div>`+(r.items.length?`<div class="bar"><h2>번역 목록</h2><button class="link" id="cp">전체 복사</button></div><div class="list">${r.items.map((it,i)=>`<div class="item${i===sel?' on':''}" data-i="${i}" role="button" tabindex="0"><span class="src ja">${esc(it.src)}</span><span class="ko">${esc(it.ko)}</span>${it.read?`<span class="rd">발음: ${esc(it.read)}</span>`:''}${it.note?`<span class="nt">${esc(it.note)}</span>`:''}${canSpeak()?`<button class="say" data-s="${i}" aria-label="일본어 발음 듣기">🔊</button>`:''}</div>`).join('')}</div>`:'');
+  $('#res').querySelectorAll('.item').forEach(el=>{el.addEventListener('click',e=>{if(e.target.closest('.say'))return;pick(+el.dataset.i,false)});el.addEventListener('keydown',e=>{if(e.key==='Enter')pick(+el.dataset.i,false)})});
+  $('#res').querySelectorAll('.say').forEach(b=>b.addEventListener('click',()=>speak(r.items[+b.dataset.s].src)));
+  $('#cp')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(r.items.map(x=>`${x.src} → ${x.ko}${x.note?' ('+x.note+')':''}`).join('\n'));$('#cp').textContent='복사됨'}catch(e){$('#cp').textContent='복사 안 됨'}});
+}
+function pick(i,fromTag){
+  sel=i;drawStage(false);drawRes();const it=cur.res.items[i];
+  if(fromTag)document.querySelector(`#res .item[data-i="${i}"]`)?.scrollIntoView({behavior:'smooth',block:'center'});
+  else openShow(it.src,it.ko+(it.note?'\n'+it.note:''),it.read);
+}
+
+const _tr={};window.__trDone=(id,r,e)=>{const p=_tr[id];if(!p)return;delete _tr[id];r!=null?p.ok(r):p.no(e)};
+function trApp(t){return new Promise((ok,no)=>{const id='t'+Date.now()+Math.random();_tr[id]={ok,no};APP.translate(t,id)})}
+$('#kgo').addEventListener('click',async()=>{
+  const t=$('#kin').value.trim();if(!t)return;const s=$('#kst');s.classList.remove('err');
+  if(APP){s.textContent='바꾸는 중…';try{const ja=await trApp(t);s.textContent='';openShow(ja,t,'')}catch(e){s.textContent='번역 모델이 아직 없어요. 카메라 탭에서 인터넷에 연결해 모델을 받아 주세요.';s.classList.add('err')}return}
+  if(navigator.onLine===false){s.textContent='오프라인이에요. 위의 자주 쓰는 말을 써 주세요.';s.classList.add('err');return}
+  s.textContent='바꾸는 중…';
+  try{const sm=await getSample();if(!sm)throw {code:'none'};
+    const r=await sm(`다음 한국어를 일본 가게·역 직원에게 보여줄 공손하고 자연스러운 일본어로 바꿔라. 첫 줄에 일본어 문장만, 둘째 줄에 그 일본어의 한글 발음만 출력하라.\n\n${t}`,{modelTier:'quick'});
+    const [ja,rd]=r.text.trim().split('\n').map(x=>x.trim()).filter(Boolean);s.textContent='';openShow(ja||r.text.trim(),t,rd||'');
+  }catch(e){s.textContent=e&&e.code==='rate_limited'?'잠시 뒤에 다시 해 주세요.':e&&e.code==='none'?'직접 입력은 Claude 앱이나 claude.ai에서 연 페이지에서만 돼요.':'바꾸지 못했어요. 다시 눌러 주세요.';s.classList.add('err')}
+});
+
+/* ---------- history ---------- */
+function saveHist(c){
+  const h=LS.get('tc-hist',[]);h.unshift({thumb:c.thumb,img:c.img,res:c.res,t:c.t});
+  for(let n=12;n>0;n--){if(LS.set('tc-hist',h.slice(0,n).map((x,i)=>i<3?x:{...x,img:x.thumb})))return}
+}
+function drawHist(){
+  const h=LS.get('tc-hist',[]);$('#hempty').hidden=!!h.length;
+  $('#hl').innerHTML=h.map((x,i)=>`<button data-i="${i}"><img src="${x.thumb}" alt=""><span>${esc((x.res?.items?.[0]?.ko)||x.res?.summary||'')}</span></button>`).join('');
+  $('#hl').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    const x=LS.get('tc-hist',[])[+b.dataset.i];if(!x)return;cur={...x};sel=-1;
+    document.querySelector('#tabs button[data-v="cam"]').click();drawStage(false);drawRes();setStatus('');
+  }));
+}
+$('#clr').addEventListener('click',()=>{try{localStorage.removeItem('tc-hist')}catch(e){}drawHist()});
+}
+</script>
+</body>
+</html>
