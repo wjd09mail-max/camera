@@ -60,6 +60,19 @@ input[type=text],input[type=search]{width:100%;font:inherit;font-size:16px;borde
 .check{display:grid;gap:8px;padding:0;margin:8px 0 0;list-style:none}
 .check li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px}
 .check li::before{content:"✓";color:var(--red);font-weight:700}
+.kmap{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:6px;margin:10px 0}
+.kmap svg{width:100%;height:auto;display:block}
+.kmap .lbl{font-size:10.5px;fill:var(--ink)}
+.kmap .flr{fill:light-dark(#f3efe8,#23252b);stroke:var(--line)}
+#kpath{fill:none;stroke:var(--red);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:8 6;animation:dash 1.2s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-14}}
+@media (prefers-reduced-motion:reduce){#kpath{animation:none}}
+.steps{list-style:none;padding:0;margin:0;display:grid;gap:8px;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer}
+.steps li::before{content:counter(s);width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:14px}
+.steps li.on{border-color:var(--red)}.steps li.on::before{background:var(--red);color:#fff}
+.steps li p{margin:4px 0 0;font-size:14px}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}.tbl td{padding:7px 4px;border-bottom:1px solid var(--line)}.tbl td:last-child{text-align:right;font-weight:700;white-space:nowrap}
 button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
 </style>
 </head>
@@ -69,6 +82,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
   <nav class="tabs" id="tabs">
     <button aria-selected="true" data-v="route">지하철 경로</button>
     <button aria-selected="false" data-v="spots">명소 길안내</button>
+    <button aria-selected="false" data-v="kix">간사이공항</button>
     <button aria-selected="false" data-v="mine">내 장소</button>
     <button aria-selected="false" data-v="prep">오프라인 준비</button>
   </nav>
@@ -97,6 +111,38 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
       <p class="small" id="locline">위치를 켜면 가까운 순서로 보여줘요.</p>
       <div class="list" id="splist"></div>
     </div>
+  </section>
+
+  <!-- KIX -->
+  <section class="view" id="v-kix" hidden>
+    <div class="chips" id="kchips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    <div class="kmap" aria-label="간사이공항 단면 안내도 (실제 축척 아님)">
+      <svg viewBox="0 0 360 300" id="ksvg">
+        <rect class="flr" x="8" y="18" width="160" height="44" rx="6"/><text class="lbl" x="16" y="36">4F 국제선 출발</text><text class="lbl" x="16" y="52" opacity=".7">체크인 · 리무진버스 내리는 곳</text>
+        <rect class="flr" x="8" y="68" width="160" height="22" rx="6" opacity=".5"/><text class="lbl" x="16" y="83" opacity=".6">3F 상점·식당</text>
+        <rect class="flr" x="8" y="96" width="160" height="50" rx="6"/><text class="lbl" x="16" y="114">2F 국내선</text><text class="lbl" x="16" y="130" opacity=".7">역으로 가는 연결통로 →</text>
+        <rect class="flr" x="8" y="152" width="160" height="56" rx="6"/><text class="lbl" x="16" y="170">1F 국제선 도착 (입국장)</text>
+        <text class="lbl" x="16" y="186" opacity=".7">북쪽·남쪽 출구</text>
+        <rect x="8" y="216" width="160" height="40" rx="6" fill="none" stroke="var(--line)" stroke-dasharray="4 3"/><text class="lbl" x="16" y="233">1F 밖: 리무진버스·택시</text><text class="lbl" x="16" y="248" opacity=".7">매표소 A~D · 승차장 번호</text>
+        <text class="lbl" x="40" y="12" font-weight="700">제1터미널 (T1)</text>
+        <rect x="168" y="108" width="62" height="24" fill="light-dark(#e9e4da,#2c2e35)"/><text class="lbl" x="174" y="124">연결통로</text>
+        <rect class="flr" x="230" y="96" width="58" height="112" rx="6"/><text class="lbl" x="236" y="114">에어로</text><text class="lbl" x="236" y="128">플라자 2F</text><text class="lbl" x="236" y="186">1F 셔틀</text><text class="lbl" x="236" y="200" opacity=".7">T2행</text>
+        <rect x="292" y="96" width="62" height="50" rx="6" fill="light-dark(#eef3ff,#1b2233)" stroke="var(--line)"/><text class="lbl" x="297" y="110" font-weight="700">간사이공항역</text><rect x="297" y="117" width="24" height="10" rx="3" fill="#1e5bb8"/><text class="lbl" x="299" y="125" fill="#fff" style="fill:#fff;font-size:8px">JR</text><rect x="324" y="117" width="26" height="10" rx="3" fill="#f08300"/><text class="lbl" style="fill:#fff;font-size:8px" x="326" y="125">난카이</text><text class="lbl" x="297" y="140" opacity=".7">매표소·발매기</text>
+        <rect x="236" y="258" width="118" height="34" rx="6" fill="none" stroke="var(--line)"/><text class="lbl" x="244" y="274" font-weight="700">제2터미널 (T2)</text><text class="lbl" x="244" y="287" opacity=".7">무료 셔틀 7~9분</text>
+        <path d="M259 208 L295 258" stroke="var(--sub)" stroke-dasharray="3 3" fill="none"/>
+        <polyline id="kpath" points=""/>
+        <g id="kme" style="transition:transform .4s"><circle r="9" fill="var(--red)" opacity=".25"/><circle r="5" fill="var(--red)" stroke="#fff" stroke-width="2"/></g>
+      </svg>
+      <p class="small" style="margin:2px 8px 6px">실제 축척이 아닌 단면 안내도예요. 빨간 점은 고른 단계의 위치예요.</p>
+    </div>
+    <div class="card" id="kgps"><span class="k">GPS로 본 내 위치 (오프라인)</span><span id="kgpst">위치 확인 중… 건물 안에서는 오차가 커서 몇 층인지는 알 수 없어요.</span>
+      <div class="btns"><button class="btn" id="kcomp">역까지 나침반 안내</button><a class="btn pri" href="https://www.google.com/maps/search/?api=1&amp;query=%E9%96%A2%E8%A5%BF%E5%9B%BD%E9%9A%9B%E7%A9%BA%E6%B8%AF%20%E7%AC%AC1%E3%82%BF%E3%83%BC%E3%83%9F%E3%83%8A%E3%83%AB">구글맵 실내 지도로 내 위치 보기</a></div>
+      <p class="small">구글맵에서 공항을 크게 확대하면 층별 실내 지도와 파란 점(내 위치)이 나와요. 와이파이와 인터넷이 필요해요.</p>
+    </div>
+    <h2 style="font-size:17px;margin:16px 2px 8px" id="ktitle"></h2>
+    <ol class="steps" id="ksteps"></ol>
+    <div id="kextra"></div>
+    <p class="small">2026년 11월 공항 공식 안내 기준이에요. 승차장 번호와 매표소 위치는 바뀔 수 있으니 현장 표지판을 함께 보세요.</p>
   </section>
 
   <!-- MINE -->
@@ -322,6 +368,73 @@ function updateNav(){
   msg.textContent=s;
 }
 
+/* ================= 간사이공항 ================= */
+const KST={lat:34.43591,lng:135.24349};// 간사이공항역 (Wikipedia 좌표)
+const KP={dep:[88,40],arr:[88,180],esc:[150,140],f2:[150,120],bridge:[199,120],aero2:[259,120],gate:[322,132],aero1:[259,190],bus:[88,240],t2:[295,272]};
+const gq=q=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+const KIX={
+ jr:{chip:'JR (하루카·간쿠쾌속)',title:'입국장 → JR 간사이공항역',steps:[
+  ['arr','입국장으로 나오기','국제선 도착은 T1 1층이에요. 세관을 지나 나오면 입국장이에요.'],
+  ['esc','2층으로 올라가기','에스컬레이터나 엘리베이터로 2층으로 올라가요. "鉄道 Railways" 표지를 따라가요.'],
+  ['bridge','연결통로 건너기','2층 연결통로를 건너면 간사이공항역이에요. 걸어서 3~5분 정도예요.'],
+  ['gate','파란색 JR 매표소에서 표 사기','간쿠쾌속(関空快速)은 일반 승차권이나 ICOCA 같은 교통카드로 바로 타요. 특급 하루카(はるか)는 승차권과 특급권이 둘 다 필요해서 JR 매표소(みどりの窓口)나 지정석 발매기에서 사요. 외국인 관광객용 할인권이 있는지도 매표소에서 물어보세요.'],
+  ['gate','개찰구 지나 타기','전광판에서 행선지를 보고 타요. 하루카는 덴노지 약 30분·신오사카 약 50분·교토 약 75분, 간쿠쾌속은 덴노지 약 45분·오사카역 약 65분이에요.']],
+  g:[['JR 매표소 위치 (구글맵)','JR関西空港駅 みどりの窓口']]},
+ nk:{chip:'난카이 (라피트·공항급행)',title:'입국장 → 난카이 간사이공항역',steps:[
+  ['arr','입국장으로 나오기','T1 1층 입국장으로 나와요.'],
+  ['esc','2층으로 올라가기','에스컬레이터로 2층에 올라가 "鉄道 Railways" 표지를 따라가요.'],
+  ['bridge','연결통로 건너기','연결통로를 건너 역으로 가요.'],
+  ['gate','주황색 난카이 매표소에서 표 사기','공항급행(空港急行)은 승차권이나 교통카드로 바로 타요(난바 약 43분). 특급 라피트(ラピート)는 승차권과 특급권(지정석)이 필요해서 난카이 매표소나 발매기에서 사요(난바 약 34~39분).'],
+  ['gate','개찰구 지나 타기','난바·신사이바시·도톤보리 쪽 숙소라면 난카이가 편해요. 교통카드 ICOCA는 JR·난카이 간사이공항역에서 살 수 있어요.']],
+  g:[['난카이 역 위치 (구글맵)','南海 関西空港駅']]},
+ bus:{chip:'리무진버스',title:'입국장 → 리무진버스 승차장',steps:[
+  ['arr','입국장으로 나오기','T1 1층 입국장으로 나와요.'],
+  ['bus','건물 밖으로 나가기','1층 출구로 나가면 바로 앞이 리무진버스·택시 승차장이에요.'],
+  ['bus','표 사기','승차장 앞 북쪽·남쪽에 있는 매표소 4곳(A~D)이나 발매기에서 사요. 발매기는 신용카드를 쓸 수 있어요.'],
+  ['bus','승차장 번호 찾아 타기','아래 표에서 행선지 번호를 확인하고 그 번호 승차장에서 타요.']],
+  table:[['오사카역 앞 (우메다·신오사카)',5],['난바 (OCAT)',11],['우에혼마치·신사이바시',7],['아베노 하루카스 (덴노지)',7],['오사카성·닛폰바시',10],['덴마바시',10],['USJ·난코·덴포잔(가이유칸)',3],['이타미 공항',8],['교토',8],['고베 산노미야',6],['나라',9],['린쿠 프리미엄 아울렛',12]],
+  g:[['리무진버스 승차장 (구글맵)','関西空港 第1ターミナル リムジンバスのりば']]},
+ t2:{chip:'제2터미널(T2) 도착',title:'T2 입국장 → 간사이공항역',steps:[
+  ['t2','T2 입국장 앞 셔틀 정류장','피치 등 일부 저비용 항공사는 T2에 도착해요. T2에는 기차역이 없어요. 입국장 출구 앞 정류장에서 무료 셔틀을 타요(24시간, 약 7~9분).'],
+  ['aero1','에어로플라자 1층에서 내리기','셔틀은 에어로플라자 1층에 서요.'],
+  ['aero2','2층으로 올라가기','에스컬레이터로 2층에 올라가요.'],
+  ['gate','역 개찰구','바로 간사이공항역이에요. JR은 파란색, 난카이는 주황색이에요. 표 사는 법은 JR·난카이 안내를 보세요.']],
+  table:[['오사카역 앞 (T2 승차장)',1],['이타미 공항 (T2 승차장)',2],['난바 OCAT (T2 승차장)',6]],tableNote:'일부 리무진버스는 T2에서도 타요. 나머지 노선은 셔틀로 T1에 가서 타요.',
+  g:[['T2 셔틀 정류장 (구글맵)','関西空港 第2ターミナル 連絡バス']]},
+ dep:{chip:'돌아갈 때 (출국)',title:'간사이공항역 → 출국',steps:[
+  ['gate','T1 이용: 개찰구 나와 왼쪽','개찰구를 나와 왼쪽(터미널 방향)으로 가요.'],
+  ['bridge','연결통로로 T1 2층','연결통로를 건너 T1 2층으로 들어가요.'],
+  ['dep','4층 국제선 출발','4층 국제선 출발층에서 체크인해요. 리무진버스로 오면 4층에 바로 내려요.'],
+  ['aero1','T2 이용: 개찰구 나와 오른쪽','T2 항공사라면 개찰구를 나와 오른쪽(T1 반대쪽)으로 가서 에어로플라자 1층 셔틀 승차장으로 내려가요.'],
+  ['t2','셔틀로 T2','T2 국내선 청사에 먼저 서고 국제선 청사는 두 번째 정류장이에요. 셔틀까지 15~20분 여유를 두세요.']],
+  g:[['T1 국제선 출발 (구글맵)','関西国際空港 第1ターミナル 国際線出発']]}
+};
+let kcur='jr',kstep=0;
+function kdraw(){
+  const g=KIX[kcur];
+  $('#kchips').innerHTML=Object.entries(KIX).map(([k,v])=>`<button class="chip" aria-pressed="${k===kcur}" data-k="${k}">${esc(v.chip)}</button>`).join('');
+  $('#kchips').querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{kcur=c.dataset.k;kstep=0;LS.set('os-kix',kcur);kdraw()}));
+  $('#ktitle').textContent=g.title;
+  const pts=[];g.steps.forEach(st=>{const p=KP[st[0]];const last=pts.at(-1);if(!last||last[0]!==p[0]||last[1]!==p[1])pts.push(p)});
+  document.getElementById('kpath').setAttribute('points',pts.map(p=>p.join(',')).join(' '));
+  $('#ksteps').innerHTML=g.steps.map((st,i)=>`<li class="${i===kstep?'on':''}" data-i="${i}" tabindex="0"><div><b>${esc(st[1])}</b><p>${esc(st[2])}</p></div></li>`).join('');
+  $('#ksteps').querySelectorAll('li').forEach(li=>{const f=()=>{kstep=+li.dataset.i;kdraw()};li.addEventListener('click',f);li.addEventListener('keydown',e=>{if(e.key==='Enter')f()})});
+  const p=KP[g.steps[kstep][0]];document.getElementById('kme').setAttribute('transform',`translate(${p[0]},${p[1]})`);
+  let ex='';
+  if(g.table)ex+=`<div class="card"><span class="k">승차장 번호</span>${g.tableNote?`<p class="small" style="margin:0 0 6px">${esc(g.tableNote)}</p>`:''}<table class="tbl">${g.table.map(r=>`<tr><td>${esc(r[0])}</td><td>${r[1]}번</td></tr>`).join('')}</table></div>`;
+  ex+=`<div class="btns">${g.g.map(x=>`<a class="btn" href="${gq(x[1])}">${esc(x[0])}</a>`).join('')}<a class="btn" href="https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent('関西空港駅')}&travelmode=transit">구글맵 시내 가는 경로</a></div>`;
+  $('#kextra').innerHTML=ex;
+}
+function kgps(){
+  const t=$('#kgpst');if(!t)return;
+  if(!me){t.textContent='위치 확인 중… 건물 안에서는 오차가 커서 몇 층인지는 알 수 없어요.';return}
+  const d=dist(me,KST);
+  if(d>5000){t.textContent=`지금은 공항에서 ${fmtD(d)} 떨어져 있어요. 공항에 도착하면 역까지 거리와 방향을 보여줘요.`;return}
+  t.textContent=`간사이공항역(JR·난카이)까지 직선 ${fmtD(d)} · ${dirName(bearing(me,KST))}쪽 · GPS 오차 ±${Math.round(me.acc)}m. 몇 층인지는 GPS로 알 수 없어요.`;
+}
+$('#kcomp').addEventListener('click',()=>openTarget({ko:'간사이공항역 (JR·난카이)',ja:'関西空港駅',lat:KST.lat,lng:KST.lng,st:'関西空港',tip:'T1 2층 연결통로를 건너면 역이에요. 파란색이 JR, 주황색이 난카이예요.',kind:'mine'}));
+kcur=LS.get('os-kix','jr');if(!KIX[kcur])kcur='jr';kdraw();
+
 /* ================= 내 장소 ================= */
 let mine=LS.get('os-mine',[]);
 function parseCoord(s){
@@ -343,7 +456,7 @@ $('#madd').addEventListener('click',()=>{
 });
 
 /* ================= 위치·나침반 (앱 네이티브) ================= */
-window.__loc=(lat,lng,acc)=>{me={lat,lng,acc};$('#locline').textContent=`내 위치 확인됨 (오차 ±${Math.round(acc)}m) · 가까운 순`;updateNav();if(!$('#v-spots').hidden&&$('#nav').hidden)drawSpots();if(!$('#v-mine').hidden)drawMine()};
+window.__loc=(lat,lng,acc)=>{me={lat,lng,acc};kgps();$('#locline').textContent=`내 위치 확인됨 (오차 ±${Math.round(acc)}m) · 가까운 순`;updateNav();if(!$('#v-spots').hidden&&$('#nav').hidden)drawSpots();if(!$('#v-mine').hidden)drawMine()};
 window.__heading=d=>{heading=d;updateNav()};
 window.__calib=()=>{calibWarn=true;updateNav()};
 window.__locErr=c=>{$('#locline').textContent='휴대폰 위치(GPS)가 꺼져 있어요. 설정에서 위치를 켜 주세요.';const m=$('#nmsg');if(m)m.textContent='휴대폰 위치(GPS)를 켜 주세요.'};
@@ -358,11 +471,11 @@ document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',
   document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
   document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!=='v-'+b.dataset.v);
   LS.set('os-tab',b.dataset.v);
-  if(b.dataset.v==='spots'||b.dataset.v==='mine')startSensors(true);
+  if(b.dataset.v==='spots'||b.dataset.v==='mine'||b.dataset.v==='kix')startSensors(true);
   if(b.dataset.v==='spots'&&$('#nav').hidden)drawSpots();
   if(b.dataset.v==='mine')drawMine();
 }));
-window.__resume=()=>{const v=LS.get('os-tab','route');if(v==='spots'||v==='mine')startSensors(!target)};
+window.__resume=()=>{const v=LS.get('os-tab','route');if(v==='spots'||v==='mine'||v==='kix')startSensors(!target)};
 const t0=LS.get('os-tab','route');document.querySelector(`#tabs button[data-v="${t0}"]`)?.click();
 drawSpots();drawMine();
 }
