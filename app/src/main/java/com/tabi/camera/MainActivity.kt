@@ -5,6 +5,31 @@ import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Typeface
+import android.hardware.GeomagneticField
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Looper
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Bundle as OsBundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.UtteranceProgressListener
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.view.Gravity
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.widget.SwitchCompat
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -15,7 +40,6 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.os.Environment
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -82,6 +106,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
     private lateinit var tabCamera: Button
     private lateinit var tabTools: Button
+    private lateinit var tabTalk: Button
+    private lateinit var tabNav: Button
+    private lateinit var navWeb: WebView
+    private lateinit var talkPane: LinearLayout
+    private lateinit var convoScroll: ScrollView
+    private lateinit var convo: LinearLayout
+    private lateinit var livePanel: LinearLayout
+    private lateinit var liveSrc: TextView
+    private lateinit var liveTr: TextView
+    private lateinit var swContinuous: SwitchCompat
+    private lateinit var swAutoSpeak: SwitchCompat
+    private lateinit var btnSpeakKo: Button
+    private lateinit var btnListenJa: Button
 
     // 일본어 글자 인식 (모델이 앱 안에 들어 있어 오프라인 동작)
     private val recognizer by lazy {
@@ -110,7 +147,7 @@ class MainActivity : AppCompatActivity() {
     private val analysisExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
     @Volatile private var live = true
-    @Volatile private var toolsShown = false
+    @Volatile private var pane = 0 // 0 카메라, 1 통역, 2 여행 도구, 3 오사카 길
     @Volatile private var busy = false
     private var lastTs = 0L
     private var camera: Camera? = null
@@ -127,6 +164,13 @@ class MainActivity : AppCompatActivity() {
     private var tts: TextToSpeech? = null
     private var ttsReady = false
 
+    // 음성 통역
+    private var speech: SpeechRecognizer? = null
+    private var listeningLang: String? = null
+    private var pendingLang: String? = null
+    private var partialSeq = 0
+    private var lastPartialTs = 0L
+
     private val jaChars = Regex("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}]")
     private val letters = Regex("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}A-Za-z]")
 
@@ -136,12 +180,67 @@ class MainActivity : AppCompatActivity() {
             else setStatus("카메라 권한이 필요해요. 설정 > 애플리케이션 > 여행 번역 카메라 > 권한에서 카메라를 허용해 주세요.")
         }
 
+    private val micLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+            val l = pendingLang
+            pendingLang = null
+            if (ok && l != null) startListening(l)
+            else if (!ok) toast("마이크 권한이 필요해요. 설정에서 마이크를 허용해 주세요.")
+        }
+
+    // 오사카 길찾기: 위치·나침반
+    private val lm by lazy { getSystemService(LOCATION_SERVICE) as LocationManager }
+    private val sm by lazy { getSystemService(SENSOR_SERVICE) as SensorManager }
+    private var locWanted = false
+    private var headWanted = false
+    private var locOn = false
+    private var headOn = false
+    private var lastLoc: Location? = null
+    private var lastHeadTs = 0L
+    private val rotM = FloatArray(9)
+    private val oriV = FloatArray(3)
+
+    private val locPermLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+            if (res.values.any { it }) applySensors()
+            else toast("위치 권한이 필요해요. 설정에서 위치를 허용해 주세요.")
+        }
+
+    private val locListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) { onLoc(location) }
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: OsBundle?) {}
+    }
+
+    private val sensorListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            val now = SystemClock.uptimeMillis()
+            if (now - lastHeadTs < 120) return
+            lastHeadTs = now
+            SensorManager.getRotationMatrixFromVector(rotM, event.values)
+            SensorManager.getOrientation(rotM, oriV)
+            var deg = Math.toDegrees(oriV[0].toDouble()).toFloat()
+            lastLoc?.let {
+                deg += GeomagneticField(
+                    it.latitude.toFloat(), it.longitude.toFloat(), it.altitude.toFloat(), System.currentTimeMillis()
+                ).declination
+            }
+            deg = (deg + 360f) % 360f
+            navJs("window.__heading&&__heading(" + String.format(Locale.US, "%.1f", deg) + ")")
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+            if (accuracy <= SensorManager.SENSOR_STATUS_ACCURACY_LOW) navJs("window.__calib&&__calib()")
+        }
+    }
+
     private val pickLauncher =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) translateUri(uri)
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: OsBundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -158,6 +257,24 @@ class MainActivity : AppCompatActivity() {
         web = findViewById(R.id.web)
         tabCamera = findViewById(R.id.tabCamera)
         tabTools = findViewById(R.id.tabTools)
+        tabTalk = findViewById(R.id.tabTalk)
+        tabNav = findViewById(R.id.tabNav)
+        navWeb = findViewById(R.id.navWeb)
+        talkPane = findViewById(R.id.talkPane)
+        convoScroll = findViewById(R.id.convoScroll)
+        convo = findViewById(R.id.convo)
+        livePanel = findViewById(R.id.livePanel)
+        liveSrc = findViewById(R.id.liveSrc)
+        liveTr = findViewById(R.id.liveTr)
+        swContinuous = findViewById(R.id.swContinuous)
+        swAutoSpeak = findViewById(R.id.swAutoSpeak)
+        btnSpeakKo = findViewById(R.id.btnSpeakKo)
+        btnListenJa = findViewById(R.id.btnListenJa)
+
+        btnSpeakKo.setOnClickListener { if (listeningLang == "ko") stopListening() else startListening("ko") }
+        btnListenJa.setOnClickListener { if (listeningLang == "ja") stopListening() else startListening("ja") }
+        swContinuous.setOnCheckedChangeListener { _, on -> if (!on && listeningLang == "ja") stopListening() }
+        findViewById<Button>(R.id.btnClearTalk).setOnClickListener { convo.removeAllViews() }
 
         btnShutter.setOnClickListener { if (live) capture() else resumeLive() }
         btnGallery.setOnClickListener { pickLauncher.launch("image/*") }
@@ -169,9 +286,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
         status.setOnClickListener { if (modelError) prepareModels() }
-        tabCamera.setOnClickListener { showTools(false) }
-        tabTools.setOnClickListener { showTools(true) }
-        showTools(false)
+        tabCamera.setOnClickListener { showPane(0) }
+        tabTalk.setOnClickListener { showPane(1) }
+        tabTools.setOnClickListener { showPane(2) }
+        tabNav.setOnClickListener { showPane(3) }
+        showPane(0)
 
         setupWeb()
 
@@ -179,13 +298,23 @@ class MainActivity : AppCompatActivity() {
             if (st == TextToSpeech.SUCCESS) {
                 val r = tts?.setLanguage(Locale.JAPANESE)
                 ttsReady = r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED
+                tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {}
+                    override fun onDone(utteranceId: String?) {
+                        if (utteranceId == "talk") runOnUiThread { continueConversation() }
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        if (utteranceId == "talk") runOnUiThread { continueConversation() }
+                    }
+                })
             }
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    toolsShown -> showTools(false)
+                    pane != 0 -> showPane(0)
                     !live -> resumeLive()
                     else -> {
                         isEnabled = false
@@ -279,7 +408,7 @@ class MainActivity : AppCompatActivity() {
     private fun analyze(proxy: ImageProxy) {
         val now = SystemClock.uptimeMillis()
         val media = proxy.image
-        if (!live || toolsShown || busy || media == null || now - lastTs < 600) {
+        if (!live || pane != 0 || busy || media == null || now - lastTs < 600) {
             proxy.close()
             return
         }
@@ -474,7 +603,18 @@ class MainActivity : AppCompatActivity() {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.addJavascriptInterface(Bridge(), "AndroidApp")
-        web.webViewClient = object : WebViewClient() {
+        web.webViewClient = linkClient()
+        web.loadUrl("file:///android_asset/tools.html")
+
+        navWeb.settings.javaScriptEnabled = true
+        navWeb.settings.domStorageEnabled = true
+        navWeb.addJavascriptInterface(NavBridge(), "AndroidNav")
+        navWeb.webViewClient = linkClient()
+        navWeb.loadUrl("file:///android_asset/osaka.html")
+    }
+
+    /** tel: 은 전화 앱, http(s) 는 구글맵 앱이나 브라우저로 연다 */
+    private fun linkClient() = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val u = request.url
                 return when (u.scheme) {
@@ -484,8 +624,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        web.loadUrl("file:///android_asset/tools.html")
-    }
 
     private fun open(i: Intent) {
         try { startActivity(i) } catch (e: Exception) { toast("열 수 없어요") }
@@ -514,20 +652,313 @@ class MainActivity : AppCompatActivity() {
 
     private fun js(s: String) = web.evaluateJavascript(s, null)
 
-    private fun showTools(on: Boolean) {
-        toolsShown = on
-        if (on && torchOn) toggleTorch()
-        cameraPane.visibility = if (on) View.GONE else View.VISIBLE
-        web.visibility = if (on) View.VISIBLE else View.GONE
-        tabCamera.alpha = if (on) 0.55f else 1f
-        tabTools.alpha = if (on) 1f else 0.55f
+    private fun showPane(p: Int) {
+        pane = p
+        if (p != 0 && torchOn) toggleTorch()
+        if (p != 1) stopListening()
+        cameraPane.visibility = if (p == 0) View.VISIBLE else View.GONE
+        talkPane.visibility = if (p == 1) View.VISIBLE else View.GONE
+        web.visibility = if (p == 2) View.VISIBLE else View.GONE
+        navWeb.visibility = if (p == 3) View.VISIBLE else View.GONE
+        tabCamera.alpha = if (p == 0) 1f else 0.5f
+        tabTalk.alpha = if (p == 1) 1f else 0.5f
+        tabTools.alpha = if (p == 2) 1f else 0.5f
+        tabNav.alpha = if (p == 3) 1f else 0.5f
+        applySensors()
+        if (p == 3) navJs("window.__resume&&__resume()")
+    }
+
+    // ---------------- 오사카 길찾기: 위치·나침반 ----------------
+
+    private fun hasLocPerm() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    @SuppressLint("MissingPermission")
+    private fun applySensors() {
+        val active = pane == 3 && !isFinishing
+        val wantLoc = active && locWanted && hasLocPerm()
+        if (wantLoc && !locOn) {
+            try {
+                var any = false
+                for (pv in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+                    if (lm.allProviders.contains(pv) && lm.isProviderEnabled(pv)) {
+                        lm.requestLocationUpdates(pv, 2000L, 2f, locListener, Looper.getMainLooper())
+                        any = true
+                    }
+                }
+                locOn = true
+                bestLastKnown()?.let { onLoc(it) }
+                if (!any) navJs("window.__locErr&&__locErr('off')")
+            } catch (e: Exception) {
+                locOn = false
+            }
+        } else if (!wantLoc && locOn) {
+            try { lm.removeUpdates(locListener) } catch (_: Exception) {}
+            locOn = false
+        }
+        val wantHead = active && headWanted
+        if (wantHead && !headOn) {
+            val s = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+            if (s != null) {
+                sm.registerListener(sensorListener, s, SensorManager.SENSOR_DELAY_UI)
+                headOn = true
+            }
+        } else if (!wantHead && headOn) {
+            sm.unregisterListener(sensorListener)
+            headOn = false
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun bestLastKnown(): Location? = try {
+        listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            .filter { lm.allProviders.contains(it) }
+            .mapNotNull { lm.getLastKnownLocation(it) }
+            .maxByOrNull { it.time }
+    } catch (e: Exception) { null }
+
+    private fun onLoc(l: Location) {
+        val prev = lastLoc
+        // 오래된 위치가 더 정확한 새 위치를 덮어쓰지 않게
+        if (prev != null && l.time < prev.time - 10_000) return
+        lastLoc = l
+        navJs("window.__loc&&__loc(${l.latitude},${l.longitude},${if (l.hasAccuracy()) l.accuracy else 50f})")
+    }
+
+    private fun navJs(s: String) {
+        if (::navWeb.isInitialized) navWeb.post { navWeb.evaluateJavascript(s, null) }
+    }
+
+    inner class NavBridge {
+        @JavascriptInterface
+        fun startLocation() {
+            runOnUiThread {
+                locWanted = true
+                if (!hasLocPerm()) locPermLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                ) else applySensors()
+            }
+        }
+
+        @JavascriptInterface
+        fun stopLocation() { runOnUiThread { locWanted = false; applySensors() } }
+
+        @JavascriptInterface
+        fun startHeading() { runOnUiThread { headWanted = true; applySensors() } }
+
+        @JavascriptInterface
+        fun stopHeading() { runOnUiThread { headWanted = false; applySensors() } }
+
+        @JavascriptInterface
+        fun hasCompass(): Boolean = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null
+    }
+
+    // ---------------- 음성 통역 (듣기 / 말하기) ----------------
+
+    private fun online(): Boolean {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return false
+        val n = cm.activeNetwork ?: return false
+        val c = cm.getNetworkCapabilities(n) ?: return false
+        return c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun startListening(lang: String) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingLang = lang
+            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            return toast("이 휴대폰에는 음성 인식 기능이 없어요. Google 앱을 설치하거나 업데이트해 주세요.")
+        }
+        stopListening()
+        tts?.stop()
+        val sr = SpeechRecognizer.createSpeechRecognizer(this)
+        sr.setRecognitionListener(listenerFor(lang))
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (lang == "ko") "ko-KR" else "ja-JP")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, !online())
+        }
+        speech = sr
+        listeningLang = lang
+        liveSrc.text = if (lang == "ko") "한국어로 말해 주세요…" else "일본어를 듣고 있어요…"
+        liveTr.text = ""
+        livePanel.visibility = View.VISIBLE
+        updateTalkButtons()
+        try {
+            sr.startListening(intent)
+        } catch (e: Exception) {
+            stopListening()
+            toast("음성 인식을 시작하지 못했어요")
+        }
+    }
+
+    private fun stopListening() {
+        speech?.let {
+            try { it.cancel(); it.destroy() } catch (_: Exception) {}
+        }
+        speech = null
+        listeningLang = null
+        if (::livePanel.isInitialized) {
+            livePanel.visibility = View.GONE
+            updateTalkButtons()
+        }
+    }
+
+    private fun updateTalkButtons() {
+        btnSpeakKo.text = if (listeningLang == "ko") "■ 그만 말하기" else "한국어로 말하기"
+        btnListenJa.text = if (listeningLang == "ja") "■ 그만 듣기" else "일본어 듣기"
+        btnSpeakKo.scaleX = 1f; btnSpeakKo.scaleY = 1f
+        btnListenJa.scaleX = 1f; btnListenJa.scaleY = 1f
+    }
+
+    private fun listenerFor(lang: String) = object : RecognitionListener {
+        override fun onReadyForSpeech(params: OsBundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {
+            val b = if (lang == "ko") btnSpeakKo else btnListenJa
+            val k = 1f + (rmsdB.coerceIn(0f, 10f) / 60f)
+            b.scaleX = k; b.scaleY = k
+        }
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onEvent(eventType: Int, params: OsBundle?) {}
+
+        override fun onPartialResults(partialResults: OsBundle?) {
+            val t = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
+            if (t.isEmpty()) return
+            liveSrc.text = t
+            val now = SystemClock.uptimeMillis()
+            if (modelReady && now - lastPartialTs > 350) {
+                lastPartialTs = now
+                val seq = ++partialSeq
+                (if (lang == "ko") koJa else jaKo).translate(t)
+                    .addOnSuccessListener { r -> if (seq == partialSeq && listeningLang == lang) liveTr.text = r }
+            }
+        }
+
+        override fun onResults(results: OsBundle?) {
+            val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
+            partialSeq++
+            stopListening()
+            if (t.isNotEmpty()) addBubble(lang, t)
+            else if (lang == "ja") continueConversation()
+        }
+
+        override fun onError(error: Int) {
+            partialSeq++
+            stopListening()
+            val quiet = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+            if (quiet && lang == "ja" && swContinuous.isChecked && pane == 1) {
+                convo.postDelayed({ if (pane == 1 && listeningLang == null) startListening("ja") }, 300)
+                return
+            }
+            toast(
+                when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                        "말소리를 알아듣지 못했어요. 다시 눌러 주세요."
+                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER, 12, 13 ->
+                        "인터넷 없이 쓰려면 오프라인 음성 인식 팩이 필요해요. 설정 > 일반 > 음성 입력에서 한국어·일본어를 받아 주세요."
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "마이크 권한이 필요해요."
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "음성 인식이 바빠요. 잠시 뒤 다시 눌러 주세요."
+                    else -> "음성 인식 오류 ($error). 다시 눌러 주세요."
+                }
+            )
+        }
+    }
+
+    /** 한국어를 말한 뒤 일본어 읽어주기가 끝났거나, 일본어 한 마디가 끝났을 때: 통역 모드면 다시 일본어를 들음 */
+    private fun continueConversation() {
+        if (swContinuous.isChecked && pane == 1 && listeningLang == null) {
+            convo.postDelayed({ if (pane == 1 && listeningLang == null) startListening("ja") }, 300)
+        }
+    }
+
+    private fun bubbleText(src: String, tr: String): CharSequence {
+        val sb = SpannableStringBuilder()
+        sb.append(src)
+        sb.setSpan(ForegroundColorSpan(0xB3FFFFFF.toInt()), 0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(RelativeSizeSpan(0.85f), 0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.append("\n")
+        val st = sb.length
+        sb.append(tr)
+        sb.setSpan(StyleSpan(Typeface.BOLD), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(RelativeSizeSpan(1.2f), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
+    }
+
+    private fun addBubble(lang: String, src: String) {
+        val tv = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            setBackgroundResource(if (lang == "ko") R.drawable.bubble_ko else R.drawable.bubble_ja)
+            maxWidth = (resources.displayMetrics.widthPixels * 0.82f).toInt()
+            text = bubbleText(src, "번역 중…")
+        }
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply {
+                topMargin = dp(8)
+                gravity = if (lang == "ko") Gravity.END else Gravity.START
+            }
+        convo.addView(tv, lp)
+        scrollConvo()
+
+        if (!modelReady) {
+            tv.text = bubbleText(src, "번역 모델이 아직 없어요 (카메라 탭에서 인터넷 연결 후 자동으로 받아요)")
+            if (lang == "ja") continueConversation()
+            return
+        }
+        (if (lang == "ko") koJa else jaKo).translate(src)
+            .addOnSuccessListener { r ->
+                tv.text = bubbleText(src, r)
+                val ja = if (lang == "ko") r else src
+                val ko = if (lang == "ko") src else r
+                tv.setOnClickListener { speakJa(ja) }
+                tv.setOnLongClickListener { showBig(ja, ko); true }
+                scrollConvo()
+                if (lang == "ko" && swAutoSpeak.isChecked && ttsReady) speakJa(r, "talk")
+                else continueConversation()
+            }
+            .addOnFailureListener {
+                tv.text = bubbleText(src, "번역하지 못했어요")
+                continueConversation()
+            }
+    }
+
+    private fun scrollConvo() {
+        convoScroll.post { convoScroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun showBig(ja: String, ko: String) {
+        val tv = TextView(this).apply {
+            text = "$ja\n\n$ko"
+            textSize = 30f
+            setTextColor(Color.BLACK)
+            setBackgroundColor(Color.WHITE)
+            setPadding(dp(24), dp(32), dp(24), dp(16))
+            gravity = Gravity.CENTER
+        }
+        AlertDialog.Builder(this)
+            .setView(tv)
+            .setNeutralButton("듣기") { _, _ -> speakJa(ja) }
+            .setPositiveButton("닫기", null)
+            .show()
     }
 
     // ---------------- 공통 ----------------
 
-    private fun speakJa(t: String) {
+    private fun speakJa(t: String, id: String = "tabi") {
         if (!ttsReady) return toast("일본어 음성이 없어요. 설정 > 텍스트 음성 변환에서 일본어를 설치해 주세요.")
-        tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, "tabi")
+        tts?.speak(t, TextToSpeech.QUEUE_FLUSH, null, id)
     }
 
     private fun setStatus(m: String) {
@@ -541,8 +972,20 @@ class MainActivity : AppCompatActivity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    override fun onPause() {
+        super.onPause()
+        if (locOn) { try { lm.removeUpdates(locListener) } catch (_: Exception) {}; locOn = false }
+        if (headOn) { sm.unregisterListener(sensorListener); headOn = false }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applySensors()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        stopListening()
         analysisExecutor.shutdown()
         recognizer.close()
         jaKo.close()

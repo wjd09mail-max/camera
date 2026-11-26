@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>오사카 길찾기</title>
+<style>
+/* VOICE: a calm pocket guide for Osaka streets and subways, works with no signal.
+   IDEA: an Osaka Metro line map card plus a compass needle.
+   PICTURE: route as coloured line ribbons; a big compass arrow when walking.
+   COLOUR and TYPE: paper white, sumi ink, vermilion accent, official line colours.
+   LAYOUT: one column, chip tabs on top, big touch targets. */
+:root{color-scheme:light dark;--bg:light-dark(#f6f4f0,#111214);--ink:light-dark(#16171a,#f1efea);--sub:light-dark(#5d5f66,#a3a4aa);--card:light-dark(#fff,#1b1c20);--line:light-dark(#e3dfd8,#2c2d33);--red:#e0402a;--redsoft:light-dark(#fde9e5,#3a1d18)}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Noto Sans KR",system-ui,sans-serif;overflow-x:clip}
+.ja{font-family:"Hiragino Sans","Noto Sans JP","Noto Sans CJK JP",sans-serif}
+.app{max-width:560px;margin:0 auto;padding:12px 14px 48px}
+h1{font-size:20px;margin:4px 2px 10px;display:flex;gap:8px;align-items:center}
+h1 .seal{width:28px;height:28px;border-radius:7px;background:var(--red);color:#fff;display:grid;place-items:center;font-size:15px}
+.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;margin:0 -14px 12px;padding:6px 14px;position:sticky;top:0;z-index:5;background:var(--bg)}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button,.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;padding:7px 14px;border-radius:999px;min-height:40px;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:500}
+.chip[aria-pressed=true]{border-color:var(--red);background:var(--redsoft);color:var(--red)}
+.view[hidden]{display:none}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:10px 0}
+.k{display:block;font-size:13px;color:var(--red);font-weight:500;margin-bottom:4px}
+.small{font-size:13px;color:var(--sub)}
+label{font-size:13px;color:var(--sub);display:block;margin:6px 0 4px}
+input[type=text],input[type=search]{width:100%;font:inherit;font-size:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:11px 13px;min-height:48px}
+.pick{position:relative}
+.sug{position:absolute;left:0;right:0;top:100%;z-index:9;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-top:4px;max-height:260px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.sug button{display:flex;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;padding:10px 12px;min-height:46px;cursor:pointer}
+.dots{display:flex;gap:3px;flex:none}.dot{width:10px;height:10px;border-radius:50%}
+.row2{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.swap{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;min-width:48px;min-height:48px;font-size:18px;cursor:pointer}
+.go{width:100%;margin-top:10px;border:0;background:var(--ink);color:var(--bg);font:inherit;font-weight:700;font-size:16px;border-radius:14px;min-height:50px;cursor:pointer}
+.go.red{background:var(--red);color:#fff}
+.btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-size:14px;border-radius:12px;min-height:48px;padding:8px 10px;cursor:pointer;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center}
+.btn.pri{background:var(--red);color:#fff;border-color:var(--red)}
+.sum{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline}
+.sum b{font-size:30px;line-height:1.1}
+.seg{display:grid;grid-template-columns:14px minmax(0,1fr);gap:12px;margin:12px 0 0}
+.bar{border-radius:7px;min-height:56px}
+.seg .ln{display:inline-block;color:#fff;font-size:12px;font-weight:700;border-radius:6px;padding:1px 8px;margin-bottom:2px}
+.seg .st{font-size:17px;font-weight:700}
+.walk{margin:10px 0 0 26px;padding:8px 12px;border-left:3px dotted var(--sub);font-size:14px;color:var(--sub)}
+.list{display:grid;gap:8px}
+.place{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;text-align:left;font:inherit;color:inherit;width:100%;cursor:pointer}
+.place b{font-size:16px}.place .d{grid-row:1/3;grid-column:2;align-self:center;font-size:14px;color:var(--red);font-weight:700;white-space:nowrap}
+.compass{position:relative;width:min(78vw,300px);aspect-ratio:1;margin:8px auto 4px;border-radius:50%;background:radial-gradient(circle,var(--card) 60%,var(--redsoft));border:2px solid var(--line)}
+.compass svg{position:absolute;inset:0;width:100%;height:100%}
+#needle{transition:transform .25s ease-out;transform-origin:50% 50%}
+@media (prefers-reduced-motion:reduce){#needle{transition:none}}
+.big{font-size:clamp(34px,11vw,52px);font-weight:700;text-align:center;line-height:1.1;white-space:nowrap}
+.center{text-align:center}
+.ok{color:#1d8a4e;font-weight:700}
+.warn{color:var(--red)}
+.check{display:grid;gap:8px;padding:0;margin:8px 0 0;list-style:none}
+.check li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px}
+.check li::before{content:"✓";color:var(--red);font-weight:700}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1><span class="seal ja">大</span>오사카 길찾기</h1>
+  <nav class="tabs" id="tabs">
+    <button aria-selected="true" data-v="route">지하철 경로</button>
+    <button aria-selected="false" data-v="spots">명소 길안내</button>
+    <button aria-selected="false" data-v="mine">내 장소</button>
+    <button aria-selected="false" data-v="prep">오프라인 준비</button>
+  </nav>
+
+  <!-- ROUTE -->
+  <section class="view" id="v-route">
+    <div class="card">
+      <span class="k">인터넷 없이 지하철·JR 경로 찾기</span>
+      <div class="row2">
+        <div class="pick"><label for="from">출발역</label><input type="search" id="from" placeholder="예: 난바, 우메다, 新大阪" autocomplete="off"><div class="sug" id="sfrom" hidden></div></div>
+        <button class="swap" id="swap" aria-label="출발역과 도착역 바꾸기">⇅</button>
+      </div>
+      <div class="pick"><label for="to">도착역</label><input type="search" id="to" placeholder="예: 오사카코(가이유칸), 덴노지" autocomplete="off"><div class="sug" id="sto" hidden></div></div>
+      <button class="go red" id="find">경로 찾기</button>
+      <p class="small" id="rerr"></p>
+    </div>
+    <div id="rout"></div>
+    <p class="small">오사카 메트로 8개 노선, JR 오사카 순환선·유메사키선(USJ), 신오사카↔오사카, 간사이공항 가는 하루카·난카이 공항선이 들어 있어요. 시간은 대기 시간을 뺀 대략적인 값이에요. 막차·운행 상황은 역에서 꼭 확인하세요.</p>
+  </section>
+
+  <!-- SPOTS -->
+  <section class="view" id="v-spots" hidden>
+    <div id="nav" hidden></div>
+    <div id="spotlist">
+      <input type="search" id="sq" placeholder="명소 찾기 (예: 오사카성, 도톤보리)">
+      <p class="small" id="locline">위치를 켜면 가까운 순서로 보여줘요.</p>
+      <div class="list" id="splist"></div>
+    </div>
+  </section>
+
+  <!-- MINE -->
+  <section class="view" id="v-mine" hidden>
+    <div class="card">
+      <span class="k">숙소·맛집 같은 내 장소 저장</span>
+      <label for="mname">이름</label><input type="text" id="mname" placeholder="예: 우리 호텔">
+      <label for="mcoord">위치 (비우면 지금 내 위치로 저장)</label>
+      <input type="text" id="mcoord" placeholder="구글맵 링크나 34.6687, 135.5013 같은 좌표">
+      <button class="go" id="madd">저장</button>
+      <p class="small" id="mmsg"></p>
+      <p class="small">구글맵에서 장소를 길게 눌러 나온 좌표나 공유 링크를 붙여 넣으면 돼요. 인터넷 없이도 나침반으로 찾아갈 수 있어요.</p>
+    </div>
+    <div class="list" id="mlist"></div>
+  </section>
+
+  <!-- PREP -->
+  <section class="view" id="v-prep" hidden>
+    <div class="card">
+      <span class="k">출국 전, Wi-Fi에서 할 일</span>
+      <ul class="check">
+        <li><span><b>구글맵 오프라인 지도 받기:</b> 아래 버튼으로 구글맵을 열고, 오른쪽 위 프로필 → <b>오프라인 지도 → 나만의 지도 선택</b>에서 오사카 시내가 화면에 들어오게 맞춘 뒤 다운로드해요.</span></li>
+        <li><span><b>내 장소에 숙소 저장:</b> 숙소 좌표를 미리 저장해 두면 데이터가 없어도 나침반으로 돌아올 수 있어요.</span></li>
+        <li><span><b>위치 권한 허용:</b> 명소 길안내에서 한 번 위치를 켜서 허용해 두세요. GPS는 인터넷 없이도 돼요.</span></li>
+        <li><span><b>나침반 보정:</b> 화살표가 이상하면 휴대폰을 공중에서 8자를 그리듯 몇 번 돌려 주세요.</span></li>
+      </ul>
+      <div class="btns"><a class="btn pri" href="https://www.google.com/maps/@34.6800,135.5000,12z">구글맵에서 오사카 열기</a><a class="btn" href="https://support.google.com/maps/answer/6291838?hl=ko">구글 오프라인 지도 도움말</a></div>
+    </div>
+    <div class="card">
+      <span class="k">인터넷이 없을 때 되는 것과 안 되는 것</span>
+      <p style="margin:0">구글맵 오프라인 지도로는 지도 보기, 장소 검색, <b>자동차</b> 길안내만 돼요. <b>도보·대중교통 길찾기는 인터넷이 필요해요.</b> 그래서 이 앱의 지하철 경로와 나침반 길안내로 그 빈 곳을 채워요.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const NAV=window.AndroidNav||null;
+
+/* ================= 노선 데이터 ================= */
+const P=s=>s.split(';').map(x=>x.split('|'));
+const LINES=[
+{id:'M',ko:'미도스지선',ja:'御堂筋線',c:'#E5171F',m:2,st:P('江坂|에사카;東三国|히가시미쿠니;新大阪|신오사카;西中島南方|니시나카지마미나미가타;中津|나카쓰;梅田|우메다;淀屋橋|요도야바시;本町|혼마치;心斎橋|신사이바시;なんば|난바;大国町|다이코쿠초;動物園前|도부쓰엔마에;天王寺|덴노지;昭和町|쇼와초;西田辺|니시타나베;長居|나가이;あびこ|아비코;北花田|기타하나다;新金岡|신카나오카;なかもず|나카모즈')},
+{id:'T',ko:'다니마치선',ja:'谷町線',c:'#8F76D6',m:2,st:P('大日|다이니치;守口|모리구치;太子橋今市|다이시바시이마이치;千林大宮|센바야시오미야;関目高殿|세키메타카도노;野江内代|노에우치다이;都島|미야코지마;天神橋筋六丁目|덴진바시스지로쿠초메;中崎町|나카자키초;東梅田|히가시우메다;南森町|미나미모리마치;天満橋|덴마바시;谷町四丁目|다니마치욘초메;谷町六丁目|다니마치로쿠초메;谷町九丁目|다니마치큐초메;四天王寺前夕陽ヶ丘|시텐노지마에유히가오카;天王寺|덴노지;阿倍野|아베노;文の里|후미노사토;田辺|다나베;駒川中野|고마가와나카노;平野|히라노;喜連瓜破|기레우리와리;出戸|데토;長原|나가하라;八尾南|야오미나미')},
+{id:'Y',ko:'요쓰바시선',ja:'四つ橋線',c:'#0078BA',m:2,st:P('西梅田|니시우메다;肥後橋|히고바시;本町|혼마치;四ツ橋|요쓰바시;なんば|난바;大国町|다이코쿠초;花園町|하나조노초;岸里|기시노사토;玉出|다마데;北加賀屋|기타카가야;住之江公園|스미노에코엔')},
+{id:'C',ko:'주오선',ja:'中央線',c:'#019A66',m:2,st:P('夢洲|유메시마;コスモスクエア|코스모스퀘어;大阪港|오사카코(가이유칸);朝潮橋|아사시오바시;弁天町|벤텐초;九条|구조;阿波座|아와자;本町|혼마치;堺筋本町|사카이스지혼마치;谷町四丁目|다니마치욘초메;森ノ宮|모리노미야;緑橋|미도리바시;深江橋|후카에바시;高井田|다카이다;長田|나가타')},
+{id:'S',ko:'센니치마에선',ja:'千日前線',c:'#E44D93',m:2,st:P('野田阪神|노다한신;玉川|다마가와;阿波座|아와자;西長堀|니시나가호리;桜川|사쿠라가와;なんば|난바;日本橋|닛폰바시;谷町九丁目|다니마치큐초메;鶴橋|쓰루하시;今里|이마자토;新深江|신후카에;小路|쇼지;北巽|기타타쓰미;南巽|미나미타쓰미')},
+{id:'K',ko:'사카이스지선',ja:'堺筋線',c:'#814721',m:2,st:P('天神橋筋六丁目|덴진바시스지로쿠초메;扇町|오기마치;南森町|미나미모리마치;北浜|기타하마;堺筋本町|사카이스지혼마치;長堀橋|나가호리바시;日本橋|닛폰바시;恵美須町|에비스초;動物園前|도부쓰엔마에;天下茶屋|덴가차야')},
+{id:'N',ko:'나가호리쓰루미료쿠치선',ja:'長堀鶴見緑地線',c:'#A9CC51',m:2,st:P('大正|다이쇼;ドーム前千代崎|도무마에치요자키;西長堀|니시나가호리;西大橋|니시오하시;心斎橋|신사이바시;長堀橋|나가호리바시;松屋町|마쓰야마치;谷町六丁目|다니마치로쿠초메;玉造|다마쓰쿠리;森ノ宮|모리노미야;大阪ビジネスパーク|오사카비즈니스파크;京橋|교바시;蒲生四丁目|가모욘초메;今福鶴見|이마후쿠쓰루미;横堤|요코즈쓰미;鶴見緑地|쓰루미료쿠치;門真南|가도마미나미')},
+{id:'I',ko:'이마자토스지선',ja:'今里筋線',c:'#EE7B1A',m:2,st:P('井高野|이타카노;瑞光四丁目|즈이코욘초메;だいどう豊里|다이도토요사토;太子橋今市|다이시바시이마이치;清水|시미즈;新森古市|신모리후루이치;関目成育|세키메세이이쿠;蒲生四丁目|가모욘초메;鴫野|시기노;緑橋|미도리바시;今里|이마자토')},
+{id:'O',ko:'JR 오사카 순환선',ja:'大阪環状線',c:'#F15A22',m:2.5,loop:true,st:P('天王寺|덴노지;寺田町|데라다초;桃谷|모모다니;鶴橋|쓰루하시;玉造|다마쓰쿠리;森ノ宮|모리노미야;大阪城公園|오사카조코엔;京橋|교바시;桜ノ宮|사쿠라노미야;天満|덴마;大阪|오사카(JR);福島|후쿠시마;野田|노다;西九条|니시쿠조;弁天町|벤텐초;大正|다이쇼;芦原橋|아시하라바시;今宮|이마미야;新今宮|신이마미야')},
+{id:'P',ko:'JR 유메사키선 (USJ)',ja:'JRゆめ咲線',c:'#1E5BB8',m:[3,2,2],st:P('西九条|니시쿠조;安治川口|아지카와구치;ユニバーサルシティ|유니버설시티(USJ);桜島|사쿠라지마')},
+{id:'A',ko:'JR 교토선',ja:'JR京都線',c:'#0072BC',m:[4],st:P('大阪|오사카(JR);新大阪|신오사카')},
+{id:'H',ko:'JR 특급 하루카 (공항)',ja:'特急はるか',c:'#5B3B8C',m:[17,32],exp:true,st:P('新大阪|신오사카;天王寺|덴노지;関西空港|간사이공항')},
+{id:'NK',ko:'난카이 공항선',ja:'南海空港線',c:'#1F3F8F',m:[3,3,27,6],exp:true,st:P('なんば|난바;新今宮|신이마미야;天下茶屋|덴가차야;りんくうタウン|린쿠타운;関西空港|간사이공항')}
+];
+// 다른 이름이지만 걸어서 갈아타는 역
+const WALK=[['梅田','東梅田',5],['梅田','西梅田',5],['東梅田','西梅田',7],['梅田','大阪',5],['東梅田','大阪',7],['西梅田','大阪',5],['動物園前','新今宮',4],['野田','野田阪神',4],['恵美須町','動物園前',6]];
+const XFER={'なんば':6,'天王寺':5,'新大阪':5,'京橋':5,'鶴橋':4};
+
+const KO={};const STATIONS={};
+LINES.forEach(l=>l.st.forEach(([ja,ko])=>{if(!KO[ja])KO[ja]=ko;(STATIONS[ja]=STATIONS[ja]||new Set()).add(l.id)}));
+const LINE=Object.fromEntries(LINES.map(l=>[l.id,l]));
+const hop=(l,i)=>Array.isArray(l.m)?l.m[i]:l.m;
+
+// 그래프: 노드 "선id|역"
+const G={};
+const add=(a,b,w,t)=>{(G[a]=G[a]||[]).push({to:b,w,t})};
+LINES.forEach(l=>{const n=l.st.length;for(let i=0;i<n-1;i++){const a=l.id+'|'+l.st[i][0],b=l.id+'|'+l.st[i+1][0];add(a,b,hop(l,i),'ride');add(b,a,hop(l,i),'ride')}
+  if(l.loop){const a=l.id+'|'+l.st[n-1][0],b=l.id+'|'+l.st[0][0];add(a,b,l.m,'ride');add(b,a,l.m,'ride')}});
+Object.entries(STATIONS).forEach(([ja,set])=>{const ids=[...set];for(const x of ids)for(const y of ids)if(x!==y)add(x+'|'+ja,y+'|'+ja,XFER[ja]||4,'xfer')});
+WALK.forEach(([a,b,w])=>{for(const x of STATIONS[a]||[])for(const y of STATIONS[b]||[]){add(x+'|'+a,y+'|'+b,w,'walk');add(y+'|'+b,x+'|'+a,w,'walk')}});
+
+function route(from,to){
+  const dist={},prev={},done=new Set();const q=[];
+  for(const id of STATIONS[from]){const k=id+'|'+from;dist[k]=0;q.push(k)}
+  while(q.length){
+    q.sort((a,b)=>dist[a]-dist[b]);const u=q.shift();if(done.has(u))continue;done.add(u);
+    if(u.split('|')[1]===to){const path=[];let c=u;while(c){path.unshift(c);c=prev[c]}return{path,min:dist[u]}}
+    for(const e of G[u]||[]){const nd=dist[u]+e.w+(e.t!=='ride'?0:0);if(dist[e.to]==null||nd<dist[e.to]){dist[e.to]=nd;prev[e.to]=u;q.push(e.to)}}
+  }
+  return null;
+}
+function segments(path){
+  const segs=[];let cur=null;
+  for(let i=0;i<path.length;i++){
+    const [lid,st]=path[i].split('|');
+    if(cur&&cur.line===lid){cur.stops.push(st)}
+    else{if(cur)segs.push(cur);cur={line:lid,stops:[st]}}
+  }
+  if(cur)segs.push(cur);
+  return segs.filter(s=>s.stops.length>1);
+}
+function direction(seg){
+  const l=LINE[seg.line],names=l.st.map(s=>s[0]),i=names.indexOf(seg.stops[0]),j=names.indexOf(seg.stops[1]);
+  if(l.loop)return `다음 역 ${KO[seg.stops[1]]} 쪽으로 타세요`;
+  const end=j>i?names[names.length-1]:names[0];
+  return `${KO[end]} 방면`;
+}
+function segMinutes(seg){const l=LINE[seg.line],names=l.st.map(s=>s[0]);let t=0;for(let k=0;k<seg.stops.length-1;k++){let i=names.indexOf(seg.stops[k]),j=names.indexOf(seg.stops[k+1]);const lo=Math.min(i,j);t+=(l.loop&&Math.abs(i-j)>1)?l.m:hop(l,lo)}return Math.round(t)}
+
+/* ================= 역 선택 ================= */
+const ALLST=Object.keys(STATIONS).map(ja=>({ja,ko:KO[ja],lines:[...STATIONS[ja]]}));
+function norm(s){return String(s).toLowerCase().replace(/\s|역|駅|\(.*?\)/g,'')}
+function stationPicker(inp,box,key){
+  let chosen=LS.get(key,null);if(chosen&&STATIONS[chosen])inp.value=`${KO[chosen]} ${chosen}`;else chosen=null;
+  const show=()=>{const q=norm(inp.value);const hit=ALLST.filter(s=>!q||norm(s.ko).includes(q)||norm(s.ja).includes(q)).slice(0,30);
+    box.innerHTML=hit.map(s=>`<button data-j="${esc(s.ja)}"><span class="dots">${s.lines.map(id=>`<i class="dot" style="background:${LINE[id].c}"></i>`).join('')}</span><span>${esc(s.ko)} <span class="ja small">${esc(s.ja)}</span></span></button>`).join('')||'<p class="small" style="padding:10px">없는 역이에요</p>';
+    box.hidden=false;
+    box.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{chosen=b.dataset.j;inp.value=`${KO[chosen]} ${chosen}`;LS.set(key,chosen);box.hidden=true}));};
+  inp.addEventListener('focus',()=>{inp.select();show()});inp.addEventListener('input',()=>{chosen=null;show()});
+  inp.addEventListener('blur',()=>setTimeout(()=>box.hidden=true,200));
+  return{get:()=>{if(chosen)return chosen;const q=norm(inp.value);const h=ALLST.find(s=>norm(s.ko)===q||norm(s.ja)===q)||ALLST.find(s=>q&&(norm(s.ko).includes(q)||norm(s.ja).includes(q)));return h?h.ja:null},
+    set:ja=>{chosen=ja;inp.value=`${KO[ja]} ${ja}`;LS.set(key,ja)}};
+}
+const pf=stationPicker($('#from'),$('#sfrom'),'os-from'),pt=stationPicker($('#to'),$('#sto'),'os-to');
+$('#swap').addEventListener('click',()=>{const a=pf.get(),b=pt.get();if(b)pf.set(b);if(a)pt.set(a)});
+$('#find').addEventListener('click',findRoute);
+
+function gmapsTransit(a,b){return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(a+'駅 大阪')}&destination=${encodeURIComponent(b+'駅 大阪')}&travelmode=transit`}
+function findRoute(){
+  const a=pf.get(),b=pt.get();$('#rerr').textContent='';
+  if(!a||!b){$('#rerr').textContent='목록에서 출발역과 도착역을 골라 주세요.';return}
+  if(a===b){$('#rerr').textContent='출발역과 도착역이 같아요.';return}
+  const r=route(a,b);if(!r){$('#rerr').textContent='경로를 찾지 못했어요.';return}
+  const segs=segments(r.path);const xfers=segs.length-1;
+  let html=`<div class="card"><div class="sum"><b>약 ${Math.round(r.min)}분</b><span>환승 ${xfers}번</span><span class="small">대기 시간 제외</span></div>`;
+  segs.forEach((s,i)=>{const l=LINE[s.line];const n=s.stops.length-1;
+    if(i>0){const p=segs[i-1].stops.at(-1),q=s.stops[0];html+=`<div class="walk">${p===q?`${esc(KO[q])}에서 갈아타기 → <b>${esc(l.ko)}</b>`:`${esc(KO[p])} → ${esc(KO[q])} 걸어서 이동 (약 ${WALK.find(w=>(w[0]===p&&w[1]===q)||(w[0]===q&&w[1]===p))?.[2]||5}분, 지하로 연결된 곳이 많아요)`}</div>`}
+    html+=`<div class="seg"><div class="bar" style="background:${l.c}"></div><div><span class="ln" style="background:${l.c}">${esc(l.ko)}</span><div class="st">${esc(KO[s.stops[0]])} <span class="ja small">${esc(s.stops[0])}</span></div><div class="small">${esc(direction(s))} · ${n}정거장 · 약 ${segMinutes(s)}분${l.exp?' · 주요 정차역만 표시':''}</div><details><summary class="small">지나는 역 보기</summary><p class="small" style="margin:4px 0">${s.stops.map(x=>esc(KO[x])).join(' → ')}</p></details><div class="st">${esc(KO[s.stops.at(-1)])} <span class="ja small">${esc(s.stops.at(-1))}</span> 하차</div></div></div>`;
+  });
+  html+=`<div class="btns"><a class="btn" href="${gmapsTransit(a,b)}">구글맵 실시간 경로 (인터넷)</a><button class="btn" id="showja">역 이름 크게 보기</button></div></div>`;
+  $('#rout').innerHTML=html;
+  $('#showja').addEventListener('click',()=>{$('#rout').insertAdjacentHTML('afterbegin',`<div class="card center"><div class="ja" style="font-size:34px;font-weight:700">${esc(b)}駅に行きたいです</div><p class="small">"${esc(KO[b])}역에 가고 싶어요" — 역무원에게 보여주세요</p></div>`)});
+}
+
+/* ================= 명소 ================= */
+// 좌표는 대략적인 값 (±100m 안팎). 마지막 칸: 가까운 역(경로 찾기용), 찾아가는 팁
+const SPOTS=P(`오사카성 천수각|大阪城天守閣|34.6873|135.5259|谷町四丁目|다니마치욘초메역 9번 출구나 JR 오사카조코엔역에서 공원 따라 도보 15~20분
+도톤보리 (글리코 간판)|道頓堀 グリコサイン|34.6688|135.5011|なんば|난바역 14번 출구 쪽, 에비스바시 다리 위
+신사이바시스지 상점가|心斎橋筋商店街|34.6735|135.5015|心斎橋|신사이바시역에서 바로 남쪽으로 이어진 아케이드
+구로몬 시장|黒門市場|34.6655|135.5070|日本橋|닛폰바시역 10번 출구 근처
+호젠지 요코초|法善寺横丁|34.6681|135.5030|なんば|도톤보리에서 남쪽 골목, 이끼 낀 부동명왕
+아메리카무라|アメリカ村|34.6720|135.4980|心斎橋|신사이바시역 서쪽 7번 출구 방향
+난바 야사카 신사 (사자 머리)|難波八阪神社|34.6612|135.4975|なんば|난바역에서 서쪽으로 도보 약 7분
+덴덴타운|でんでんタウン|34.6585|135.5065|恵美須町|에비스초역 1번 출구 북쪽 사카이스지 거리
+쓰텐카쿠 (신세카이)|通天閣|34.6525|135.5063|恵美須町|에비스초역 3번 출구에서 도보 3분
+덴노지 동물원|天王寺動物園|34.6510|135.5100|動物園前|도부쓰엔마에역·신이마미야역에서 도보 5분
+아베노 하루카스 전망대|あべのハルカス|34.6461|135.5136|天王寺|덴노지역과 바로 연결
+시텐노지|四天王寺|34.6536|135.5163|四天王寺前夕陽ヶ丘|시텐노지마에유히가오카역에서 도보 5분
+우메다 스카이빌딩 공중정원|梅田スカイビル|34.7053|135.4897|梅田|JR 오사카역 북쪽 출구에서 지하도 따라 도보 약 10분
+헵파이브 관람차|HEP FIVE観覧車|34.7041|135.5004|梅田|우메다역·히가시우메다역에서 도보 3분
+그랜드 프론트 오사카|グランフロント大阪|34.7051|135.4945|大阪|JR 오사카역 북쪽과 연결
+오사카 덴만구|大阪天満宮|34.6955|135.5122|南森町|미나미모리마치역 4번 출구 근처
+덴진바시스지 상점가|天神橋筋商店街|34.7010|135.5115|天神橋筋六丁目|덴진바시스지로쿠초메역부터 남쪽으로 2.6km
+나카노시마 공원|中之島公園|34.6921|135.5069|北浜|기타하마역·요도야바시역에서 도보 5분
+오사카 역사박물관|大阪歴史博物館|34.6823|135.5205|谷町四丁目|다니마치욘초메역 9번 출구 바로 앞
+가이유칸 (수족관)|海遊館|34.6545|135.4289|大阪港|오사카코역 1번 출구에서 도보 5분
+덴포잔 대관람차|天保山大観覧車|34.6560|135.4312|大阪港|가이유칸 바로 옆
+유니버설 스튜디오 재팬|ユニバーサル・スタジオ・ジャパン|34.6654|135.4323|ユニバーサルシティ|유니버설시티역에서 도보 5분
+쓰루하시 시장·코리아타운|鶴橋市場|34.6650|135.5310|鶴橋|쓰루하시역 바로 앞 시장, 코리아타운은 남동쪽 도보 10분
+스미요시 타이샤|住吉大社|34.6125|135.4930||난카이 본선 스미요시타이샤역 앞 (이 앱 노선도에는 없음)
+만박기념공원 (태양의 탑)|万博記念公園|34.8094|135.5320||오사카 모노레일 반파쿠키넨코엔역 앞 (이 앱 노선도에는 없음)
+간사이 국제공항|関西国際空港|34.4320|135.2304|関西空港|하루카·난카이 공항선
+신오사카역 (신칸센)|新大阪駅|34.7335|135.5002|新大阪|신칸센·미도스지선
+JR 오사카역|大阪駅|34.7025|135.4959|大阪|우메다와 지하로 연결
+난바역|なんば駅|34.6664|135.5009|なんば|미도스지·요쓰바시·센니치마에선, 난카이`.replace(/\n/g,';')).map(r=>({ko:r[0],ja:r[1],lat:+r[2],lng:+r[3],st:r[4],tip:r[5]}));
+
+let me=null,heading=null,target=null,calibWarn=false;
+function dist(a,b){const R=6371000,t=Math.PI/180,dl=(b.lat-a.lat)*t,dn=(b.lng-a.lng)*t,x=Math.sin(dl/2)**2+Math.cos(a.lat*t)*Math.cos(b.lat*t)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function bearing(a,b){const t=Math.PI/180,y=Math.sin((b.lng-a.lng)*t)*Math.cos(b.lat*t),x=Math.cos(a.lat*t)*Math.sin(b.lat*t)-Math.sin(a.lat*t)*Math.cos(b.lat*t)*Math.cos((b.lng-a.lng)*t);return(Math.atan2(y,x)/t+360)%360}
+const fmtD=m=>m<1000?`${Math.round(m/10)*10}m`:`${(m/1000).toFixed(m<10000?1:0)}km`;
+const walkMin=m=>Math.max(1,Math.round(m*1.3/75));// 직선거리×1.3, 분속 75m
+const DIRS=['북','북동','동','남동','남','남서','서','북서'];
+const dirName=d=>DIRS[Math.round(d/45)%8];
+
+function drawSpots(){
+  const q=norm($('#sq').value);
+  let l=SPOTS.filter(s=>!q||norm(s.ko).includes(q)||norm(s.ja).includes(q));
+  if(me)l=l.map(s=>({...s,d:dist(me,s)})).sort((a,b)=>a.d-b.d);
+  $('#splist').innerHTML=l.map(s=>`<button class="place" data-i="${SPOTS.indexOf(SPOTS.find(x=>x.ko===s.ko))}"><b>${esc(s.ko)}</b><span class="d">${s.d!=null?fmtD(s.d):''}</span><span class="small ja">${esc(s.ja)}</span></button>`).join('');
+  $('#splist').querySelectorAll('.place').forEach(b=>b.addEventListener('click',()=>openTarget({...SPOTS[+b.dataset.i],kind:'spot'})));
+}
+$('#sq').addEventListener('input',drawSpots);
+
+function gmapsWalk(t){const dest=t.kind==='spot'?encodeURIComponent(t.ja+' 大阪'):`${t.lat},${t.lng}`;return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=walking`}
+function gmapsTransitTo(t){const dest=t.kind==='spot'?encodeURIComponent(t.ja+' 大阪'):`${t.lat},${t.lng}`;return `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=transit`}
+
+function openTarget(t){
+  target=t;
+  document.querySelector('#tabs button[data-v="spots"]').click();
+  $('#spotlist').hidden=true;$('#nav').hidden=false;
+  $('#nav').innerHTML=`<button class="link btn" id="back" style="min-height:40px;width:auto;padding:0 12px">← 목록</button>
+  <div class="card center"><b style="font-size:20px">${esc(t.ko)}</b><div class="ja small">${esc(t.ja||'')}</div>
+   <div class="compass"><svg viewBox="0 0 200 200" aria-hidden="true"><g id="needle"><path d="M100 22 L126 112 L100 98 L74 112 Z" fill="#e0402a"/><path d="M100 98 L126 112 L100 178 L74 112 Z" fill="currentColor" opacity=".18"/></g><circle cx="100" cy="100" r="6" fill="currentColor"/></svg></div>
+   <div class="big" id="ndist">위치 확인 중…</div><p id="nmsg" class="small" style="margin:6px 0 0"></p></div>
+  ${t.tip?`<div class="card"><span class="k">찾아가는 팁</span>${esc(t.tip)}</div>`:''}
+  <div class="btns"><a class="btn pri" href="${gmapsWalk(t)}">구글맵 도보 길찾기</a><a class="btn" href="${gmapsTransitTo(t)}">구글맵 대중교통</a>${t.st?`<button class="btn" id="tost">지하철 경로 (오프라인)</button>`:''}<button class="btn" id="showtx">일본어로 길 묻기</button></div>
+  <p class="small">화살표는 목적지 방향(직선)이에요. 휴대폰을 평평하게 들고 화살표 쪽으로 걸으면 돼요. 길이 막히면 돌아가도 화살표가 다시 방향을 잡아 줘요. 구글맵 버튼은 인터넷이 필요해요.</p>`;
+  $('#back').addEventListener('click',closeTarget);
+  $('#tost')?.addEventListener('click',()=>{pt.set(t.st);document.querySelector('#tabs button[data-v="route"]').click();$('#from').focus()});
+  $('#showtx').addEventListener('click',()=>{$('#nmsg').innerHTML=`<span class="ja" style="font-size:26px;font-weight:700;color:var(--ink)">${esc(t.ja||t.ko)}へはどう行けばいいですか？</span><br>"${esc(t.ko)}에 어떻게 가요?" — 화면을 보여주세요`});
+  startSensors();updateNav();
+}
+function closeTarget(){target=null;$('#nav').hidden=true;$('#spotlist').hidden=false;NAV&&NAV.stopHeading();drawSpots()}
+function updateNav(){
+  if(!target||$('#nav').hidden)return;
+  const nd=$('#ndist'),msg=$('#nmsg'),needle=document.getElementById('needle');if(!nd)return;
+  if(!me){nd.textContent='위치 확인 중…';return}
+  const d=dist(me,target),b=bearing(me,target);
+  if(d<30){nd.innerHTML='<span class="ok">도착!</span>';msg.textContent='목적지 근처예요. 주변 간판을 확인해 보세요.';needle.style.transform='rotate(0deg)';return}
+  nd.textContent=fmtD(d);
+  const rel=heading==null?b:(b-heading+360)%360;
+  needle.style.transform=`rotate(${rel}deg)`;
+  let s=`걸어서 약 ${walkMin(d)}분 · ${dirName(b)}쪽`;
+  if(heading==null)s+=' · 나침반이 없어 화살표는 북쪽 기준이에요';
+  if(me.acc>60)s+=` · GPS 오차 ±${Math.round(me.acc)}m (건물 밖으로 나가면 정확해져요)`;
+  if(calibWarn)s+=' · 나침반 보정 필요: 휴대폰으로 8자를 그려 주세요';
+  if(d>1500&&target.st)s+=' · 걷기엔 멀어요. 지하철 경로 버튼을 눌러 보세요';
+  msg.textContent=s;
+}
+
+/* ================= 내 장소 ================= */
+let mine=LS.get('os-mine',[]);
+function parseCoord(s){
+  s=String(s).trim();if(!s)return null;
+  let m=s.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)||s.match(/[?&](?:q|query|ll|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i)||s.match(/(-?\d{1,2}\.\d{3,})\s*[, ]\s*(-?\d{2,3}\.\d{3,})/);
+  if(!m)return null;const lat=+m[1],lng=+m[2];if(Math.abs(lat)>90||Math.abs(lng)>180)return null;return{lat,lng};
+}
+function drawMine(){
+  $('#mlist').innerHTML=mine.length?mine.map((p,i)=>`<div class="card"><div class="row2" style="align-items:center"><div><b>${esc(p.ko)}</b><div class="small">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}${me?` · ${fmtD(dist(me,p))}`:''}</div></div><button class="btn" data-del="${i}" style="min-width:64px">삭제</button></div><div class="btns"><button class="btn pri" data-go="${i}">나침반 안내</button><a class="btn" href="${gmapsWalk({...p,kind:'mine'})}">구글맵 도보</a></div></div>`).join(''):'<p class="small">아직 저장한 장소가 없어요.</p>';
+  $('#mlist').querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>openTarget({...mine[+b.dataset.go],kind:'mine'})));
+  $('#mlist').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{mine.splice(+b.dataset.del,1);LS.set('os-mine',mine);drawMine()}));
+}
+$('#madd').addEventListener('click',()=>{
+  const name=$('#mname').value.trim()||'내 장소',raw=$('#mcoord').value.trim(),msg=$('#mmsg');
+  let c=raw?parseCoord(raw):(me?{lat:me.lat,lng:me.lng}:null);
+  if(raw&&!c){msg.textContent='좌표를 읽지 못했어요. 34.6687, 135.5013처럼 붙여 넣어 주세요. (짧은 공유 링크 maps.app.goo.gl은 좌표가 없어 안 돼요)';return}
+  if(!c){msg.textContent='지금 위치를 아직 몰라요. 잠시 뒤 다시 눌러 주세요.';startSensors(true);return}
+  mine.unshift({ko:name,lat:c.lat,lng:c.lng});LS.set('os-mine',mine);$('#mname').value='';$('#mcoord').value='';msg.textContent=`"${name}" 저장했어요.`;drawMine();
+});
+
+/* ================= 위치·나침반 (앱 네이티브) ================= */
+window.__loc=(lat,lng,acc)=>{me={lat,lng,acc};$('#locline').textContent=`내 위치 확인됨 (오차 ±${Math.round(acc)}m) · 가까운 순`;updateNav();if(!$('#v-spots').hidden&&$('#nav').hidden)drawSpots();if(!$('#v-mine').hidden)drawMine()};
+window.__heading=d=>{heading=d;updateNav()};
+window.__calib=()=>{calibWarn=true;updateNav()};
+window.__locErr=c=>{$('#locline').textContent='휴대폰 위치(GPS)가 꺼져 있어요. 설정에서 위치를 켜 주세요.';const m=$('#nmsg');if(m)m.textContent='휴대폰 위치(GPS)를 켜 주세요.'};
+function startSensors(locOnly){
+  if(NAV){try{NAV.startLocation();if(!locOnly&&target)NAV.startHeading()}catch(e){}return}
+  // 브라우저에서 열었을 때 (테스트용)
+  if(navigator.geolocation&&!window.__geo){window.__geo=navigator.geolocation.watchPosition(p=>__loc(p.coords.latitude,p.coords.longitude,p.coords.accuracy),()=>{},{enableHighAccuracy:true})}
+}
+
+/* ================= 탭 ================= */
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!=='v-'+b.dataset.v);
+  LS.set('os-tab',b.dataset.v);
+  if(b.dataset.v==='spots'||b.dataset.v==='mine')startSensors(true);
+  if(b.dataset.v==='spots'&&$('#nav').hidden)drawSpots();
+  if(b.dataset.v==='mine')drawMine();
+}));
+window.__resume=()=>{const v=LS.get('os-tab','route');if(v==='spots'||v==='mine')startSensors(!target)};
+const t0=LS.get('os-tab','route');document.querySelector(`#tabs button[data-v="${t0}"]`)?.click();
+drawSpots();drawMine();
+}
+</script>
+</body>
+</html>
